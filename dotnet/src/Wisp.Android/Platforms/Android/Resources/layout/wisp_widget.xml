@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:padding="16dp"
+    android:background="@drawable/widget_background">
+
+    <LinearLayout
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:gravity="center"
+        android:background="@drawable/widget_badge">
+        <ImageView
+            android:id="@+id/widget_icon"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:src="@drawable/wisp_notification"
+            android:contentDescription="Wisp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="13dp"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/widget_kicker"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="WISP"
+            android:textColor="#45E3B4"
+            android:textSize="9sp"
+            android:letterSpacing="0.18"
+            android:maxLines="1" />
+
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Ready nearby"
+            android:textColor="#F5F8F7"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/widget_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="No transfers in progress"
+            android:textColor="#9AA6A3"
+            android:textSize="11sp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <ProgressBar
+            android:id="@+id/widget_progress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="7dp"
+            android:max="100"
+            android:progress="0"
+            android:progressTint="#45E3B4"
+            android:progressBackgroundTint="#2EFFFFFF"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_send"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="10dp"
+        android:paddingStart="15dp"
+        android:paddingEnd="15dp"
+        android:paddingTop="9dp"
+        android:paddingBottom="9dp"
+        android:background="@drawable/widget_send_bg"
+        android:text="Send"
+        android:textColor="#08120F"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+</LinearLayout>

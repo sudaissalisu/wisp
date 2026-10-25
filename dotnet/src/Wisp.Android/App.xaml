@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Application xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:local="clr-namespace:Wisp.Android"
+             x:Class="Wisp.Android.App">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Resources/Styles/Colors.xaml" />
+                <ResourceDictionary Source="Resources/Styles/Styles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Accent palette (theme independent) -->
+            <Color x:Key="Mint">#45E3B4</Color>
+            <Color x:Key="MintDeep">#14C99A</Color>
+            <Color x:Key="MintSoft">#1F45E3B4</Color>
+            <Color x:Key="Blue">#5B8DEF</Color>
+            <Color x:Key="Coral">#FF7168</Color>
+            <Color x:Key="CoralSoft">#26FF7168</Color>
+            <Color x:Key="OnAccent">#08120F</Color>
+            <Color x:Key="Skyward">#B7FFE8</Color>
+            <SolidColorBrush x:Key="MintBrush" Color="{StaticResource Mint}" />
+            <SolidColorBrush x:Key="MintSoftBrush" Color="{StaticResource MintSoft}" />
+            <SolidColorBrush x:Key="BlueBrush" Color="{StaticResource Blue}" />
+            <SolidColorBrush x:Key="CoralBrush" Color="{StaticResource Coral}" />
+            <SolidColorBrush x:Key="OnAccentBrush" Color="{StaticResource OnAccent}" />
+
+            <LinearGradientBrush x:Key="Aurora" StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Color="#5B8DEF" Offset="0" />
+                <GradientStop Color="#45E3B4" Offset="0.55" />
+                <GradientStop Color="#B7FFE8" Offset="1" />
+            </LinearGradientBrush>
+            <LinearGradientBrush x:Key="HeroGradient" StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Color="#28477F" Offset="0" />
+                <GradientStop Color="#143B33" Offset="0.58" />
+                <GradientStop Color="#1A2029" Offset="1" />
+            </LinearGradientBrush>
+            <LinearGradientBrush x:Key="AvatarFallback" StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Color="#33475E" Offset="0" />
+                <GradientStop Color="#202A36" Offset="1" />
+            </LinearGradientBrush>
+
+            <!-- Themed surfaces -->
+            <Color x:Key="InkDark">#0B0E12</Color>
+            <Color x:Key="InkLight">#F4F7F6</Color>
+            <Color x:Key="SurfaceDark">#141920</Color>
+            <Color x:Key="SurfaceLight">#FFFFFF</Color>
+            <Color x:Key="SurfaceAltDark">#1B222C</Color>
+            <Color x:Key="SurfaceAltLight">#EFF3F1</Color>
+            <Color x:Key="TextDark">#F5F8F7</Color>
+            <Color x:Key="TextLight">#101519</Color>
+            <Color x:Key="MutedDark">#9AA6A3</Color>
+            <Color x:Key="MutedLight">#5B6663</Color>
+            <Color x:Key="FaintDark">#66726F</Color>
+            <Color x:Key="FaintLight">#8A948F</Color>
+            <Color x:Key="LineDark">#1FFFFFFF</Color>
+            <Color x:Key="LineLight">#E2E8E5</Color>
+
+            <Style x:Key="PageStyle" TargetType="Page">
+                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}" />
+            </Style>
+
+            <Style x:Key="DisplayLabel" TargetType="Label">
+                <Setter Property="FontFamily" Value="OpenSansSemibold" />
+                <Setter Property="FontSize" Value="32" />
+                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                <Setter Property="LineHeight" Value="1.05" />
+            </Style>
+            <Style x:Key="TitleLabel" TargetType="Label">
+                <Setter Property="FontFamily" Value="OpenSansSemibold" />
+                <Setter Property="FontSize" Value="19" />
+                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+            </Style>
+            <Style x:Key="SectionLabel" TargetType="Label">
+                <Setter Property="FontFamily" Value="OpenSansSemibold" />
+                <Setter Property="FontSize" Value="15" />
+                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+            </Style>
+            <Style x:Key="RowLabel" TargetType="Label">
+                <Setter Property="FontSize" Value="14.5" />
+                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+            </Style>
+            <Style x:Key="BodyLabel" TargetType="Label">
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                <Setter Property="LineHeight" Value="1.35" />
+            </Style>
+            <Style x:Key="MutedLabel" TargetType="Label">
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                <Setter Property="LineHeight" Value="1.35" />
+            </Style>
+            <Style x:Key="TinyLabel" TargetType="Label">
+                <Setter Property="FontSize" Value="11" />
+                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource FaintLight}, Dark={StaticResource FaintDark}}" />
+            </Style>
+            <!-- Icon glyphs rendered from Material Icons -->
+            <Style x:Key="IconLabel" TargetType="Label">
+                <Setter Property="FontFamily" Value="MaterialIcons-Regular" />
+                <Setter Property="FontSize" Value="22" />
+                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                <Setter Property="HorizontalTextAlignment" Value="Center" />
+                <Setter Property="VerticalTextAlignment" Value="Center" />
+            </Style>
+            <Style x:Key="NavIcon" TargetType="Label" BasedOn="{StaticResource IconLabel}">
+                <Setter Property="FontSize" Value="21" />
+                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource FaintLight}, Dark={StaticResource FaintDark}}" />
+            </Style>
+
+            <Style x:Key="SurfaceCard" TargetType="Border">
+                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}" />
+                <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
+                <Setter Property="StrokeThickness" Value="1" />
+                <Setter Property="Padding" Value="18" />
+                <Setter Property="StrokeShape">
+                    <Setter.Value>
+                        <RoundRectangle CornerRadius="22" />
+                    </Setter.Value>
+                </Setter>
+            </Style>
+            <Style x:Key="InnerCard" TargetType="Border" BasedOn="{StaticResource SurfaceCard}">
+                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource SurfaceAltLight}, Dark={StaticResource SurfaceAltDark}}" />
+                <Setter Property="StrokeThickness" Value="0" />
+                <Setter Property="Padding" Value="14" />
+                <Setter Property="StrokeShape">
+                    <Setter.Value>
+                        <RoundRectangle CornerRadius="16" />
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style x:Key="PrimaryButton" TargetType="Button">
+                <Setter Property="BackgroundColor" Value="{StaticResource Mint}" />
+                <Setter Property="TextColor" Value="{StaticResource OnAccent}" />
+                <Setter Property="FontFamily" Value="OpenSansSemibold" />
+                <Setter Property="FontSize" Value="14.5" />
+                <Setter Property="CornerRadius" Value="14" />
+                <Setter Property="HeightRequest" Value="48" />
+                <Setter Property="Padding" Value="20,0" />
+            </Style>
+            <Style x:Key="HeroSecondaryButton" TargetType="Button">
+                <Setter Property="BackgroundColor" Value="#24FFFFFF" />
+                <Setter Property="TextColor" Value="#F5F8F7" />
+                <Setter Property="FontFamily" Value="OpenSansSemibold" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="CornerRadius" Value="14" />
+                <Setter Property="HeightRequest" Value="48" />
+                <Setter Property="Padding" Value="18,0" />
+            </Style>
+            <Style x:Key="SecondaryButton" TargetType="Button">
+                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource SurfaceAltLight}, Dark={StaticResource SurfaceAltDark}}" />
+                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                <Setter Property="FontFamily" Value="OpenSansSemibold" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="CornerRadius" Value="14" />
+                <Setter Property="HeightRequest" Value="48" />
+                <Setter Property="Padding" Value="18,0" />
+            </Style>
+            <Style x:Key="GhostButton" TargetType="Button">
+                <Setter Property="BackgroundColor" Value="Transparent" />
+                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                <Setter Property="FontFamily" Value="OpenSansSemibold" />
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="CornerRadius" Value="12" />
+                <Setter Property="HeightRequest" Value="44" />
+                <Setter Property="Padding" Value="12,0" />
+            </Style>
+            <Style x:Key="FormEntry" TargetType="Entry">
+                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource SurfaceAltLight}, Dark={StaticResource SurfaceAltDark}}" />
+                <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="HeightRequest" Value="50" />
+            </Style>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

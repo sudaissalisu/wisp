@@ -1,0 +1,925 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:local="clr-namespace:Wisp.Android"
+             x:Class="Wisp.Android.MainPage"
+             Style="{StaticResource PageStyle}"
+             Shell.NavBarIsVisible="False">
+
+    <Grid RowDefinitions="Auto,*,Auto" Style="{StaticResource PageStyle}">
+
+        <!-- ── Header ─────────────────────────────────────────────── -->
+        <Grid Grid.Row="0" Padding="18,4,18,6" ColumnDefinitions="Auto,*,Auto">
+            <HorizontalStackLayout Spacing="10" VerticalOptions="Center">
+                <Border WidthRequest="32" HeightRequest="32" StrokeThickness="0"
+                        Background="{StaticResource Aurora}">
+                    <Border.StrokeShape>
+                        <RoundRectangle CornerRadius="11" />
+                    </Border.StrokeShape>
+                    <Label Text="w" FontFamily="OpenSansSemibold" FontSize="16"
+                           TextColor="{StaticResource OnAccent}"
+                           HorizontalOptions="Center" VerticalOptions="Center" />
+                </Border>
+                <Label Text="wisp" FontFamily="OpenSansSemibold" FontSize="17"
+                       TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}"
+                       VerticalOptions="Center" />
+            </HorizontalStackLayout>
+
+            <!-- Activity cluster: gauge + label, tap to open transfers -->
+            <Border Grid.Column="2" BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceAltLight}, Dark={StaticResource SurfaceAltDark}}"
+                    StrokeThickness="0" Padding="12,7" VerticalOptions="Center"
+                    StrokeShape="RoundRectangle 18">
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="HeaderActivity_Tapped" />
+                </Border.GestureRecognizers>
+                <HorizontalStackLayout Spacing="8">
+                    <GraphicsView x:Name="HeaderGauge" WidthRequest="26" HeightRequest="26" />
+                    <Label x:Name="HeaderActivityLabel" Text="visible" FontSize="12"
+                           FontFamily="OpenSansSemibold"
+                           TextColor="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}"
+                           VerticalOptions="Center" />
+                </HorizontalStackLayout>
+            </Border>
+        </Grid>
+
+        <!-- ── Pages ──────────────────────────────────────────────── -->
+        <Grid Grid.Row="1">
+
+            <!-- NEARBY -->
+            <ScrollView x:Name="NearbyScroll" VerticalScrollBarVisibility="Never">
+                <VerticalStackLayout Padding="18,4,18,26" Spacing="18">
+
+                    <!-- Hero presence card -->
+                    <Border Background="{StaticResource HeroGradient}"
+                            StrokeThickness="1"
+                            Stroke="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}"
+                            Padding="18" StrokeShape="RoundRectangle 28">
+                        <VerticalStackLayout Spacing="13">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="16">
+                                <Grid WidthRequest="104" HeightRequest="104">
+                                    <Ellipse x:Name="PresencePulseRing" Stroke="{StaticResource MintBrush}"
+                                             StrokeThickness="1.6" Opacity="0.55"
+                                             HorizontalOptions="Center" VerticalOptions="Center"
+                                             WidthRequest="104" HeightRequest="104" />
+                                    <Border WidthRequest="76" HeightRequest="76" Background="{StaticResource Aurora}"
+                                            HorizontalOptions="Center" VerticalOptions="Center">
+                                        <Border.StrokeShape>
+                                            <RoundRectangle CornerRadius="26" />
+                                        </Border.StrokeShape>
+                                        <Label x:Name="PresenceInitials" Text="W" FontFamily="OpenSansSemibold"
+                                               FontSize="24" TextColor="{StaticResource OnAccent}"
+                                               HorizontalOptions="Center" VerticalOptions="Center" />
+                                    </Border>
+                                </Grid>
+                                <VerticalStackLayout Grid.Column="1" Spacing="5" VerticalOptions="Center">
+                                    <HorizontalStackLayout Spacing="6">
+                                        <Ellipse WidthRequest="7" HeightRequest="7" HorizontalOptions="Start">
+                                            <Ellipse.Fill>
+                                                <SolidColorBrush x:Name="PresenceDot" Color="#66726F" />
+                                            </Ellipse.Fill>
+                                        </Ellipse>
+                                        <Label x:Name="PresenceStatusLabel" Text="Connecting…" FontSize="11"
+                                               FontFamily="OpenSansSemibold" TextColor="{StaticResource Mint}" />
+                                    </HorizontalStackLayout>
+                                    <Label x:Name="PresenceNameLabel" Text="This phone"
+                                           FontFamily="OpenSansSemibold" FontSize="21"
+                                           TextColor="#F5F8F7"
+                                           LineBreakMode="TailTruncation" />
+                                    <Label x:Name="PresenceSubLabel" Text="Visible on this Wi-Fi · TLS 1.3"
+                                           FontSize="11" TextColor="#B9C6C1" />
+                                </VerticalStackLayout>
+                            </Grid>
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                                <Button Text="Send files" Style="{StaticResource PrimaryButton}" Clicked="SendFiles_Click" />
+                                <Button Grid.Column="1" Text="This device" Style="{StaticResource HeroSecondaryButton}"
+                                        Clicked="ShowIdentity_Click" />
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="Nearby devices" Style="{StaticResource SectionLabel}" VerticalOptions="Center" />
+                        <Label x:Name="PeerCountLabel" Grid.Column="1" Text="Looking around…"
+                               Style="{StaticResource TinyLabel}" VerticalOptions="Center" />
+                    </Grid>
+
+                    <VerticalStackLayout x:Name="PeersHost" Spacing="10"
+                                         BindableLayout.ItemsSource="{Binding Peers}">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource SurfaceCard}" Padding="16">
+                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                                        <Border WidthRequest="54" HeightRequest="54" Background="{Binding AvatarBrush}">
+                                            <Border.StrokeShape>
+                                                <RoundRectangle CornerRadius="18" />
+                                            </Border.StrokeShape>
+                                            <Label Text="{Binding Initials}" FontFamily="OpenSansSemibold"
+                                                   FontSize="15" TextColor="{StaticResource OnAccent}"
+                                                   HorizontalOptions="Center" VerticalOptions="Center" />
+                                        </Border>
+                                        <VerticalStackLayout Grid.Column="1" Spacing="3" VerticalOptions="Center">
+                                            <Label Text="{Binding Name}" FontFamily="OpenSansSemibold"
+                                                   FontSize="15.5"
+                                                   TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}"
+                                                   LineBreakMode="TailTruncation" />
+                                            <HorizontalStackLayout Spacing="5">
+                                                <Label FontFamily="MaterialIcons-Regular" FontSize="13"
+                                                       Text="{Binding PlatformGlyph}"
+                                                       TextColor="{StaticResource Mint}" VerticalOptions="Center" />
+                                                <Label Text="{Binding Subtitle}" Style="{StaticResource TinyLabel}" />
+                                            </HorizontalStackLayout>
+                                        </VerticalStackLayout>
+                                        <Border Grid.Column="2" BackgroundColor="{StaticResource MintSoft}"
+                                                StrokeThickness="0" Padding="14,9"
+                                                StrokeShape="RoundRectangle 13" VerticalOptions="Center">
+                                            <Border.GestureRecognizers>
+                                                <TapGestureRecognizer CommandParameter="{Binding Id}" Tapped="PeerSend_Tapped" />
+                                            </Border.GestureRecognizers>
+                                            <HorizontalStackLayout Spacing="6">
+                                                <Label FontFamily="MaterialIcons-Regular" Text="&#xE163;" FontSize="14"
+                                                       TextColor="{StaticResource Mint}" VerticalOptions="Center" />
+                                                <Label Text="Send" FontFamily="OpenSansSemibold" FontSize="13"
+                                                       TextColor="{StaticResource Mint}" VerticalOptions="Center" />
+                                            </HorizontalStackLayout>
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+
+                    <Border x:Name="NoPeersCard" Style="{StaticResource SurfaceCard}" IsVisible="False" Padding="22">
+                        <VerticalStackLayout Spacing="10" HorizontalOptions="Center" Padding="0,10">
+                            <Label FontFamily="MaterialIcons-Regular" Text="&#xE1B1;" FontSize="38"
+                                   TextColor="{StaticResource Mint}" HorizontalTextAlignment="Center" />
+                            <Label Text="No devices visible yet" Style="{StaticResource SectionLabel}"
+                                   HorizontalTextAlignment="Center" />
+                            <Label Text="Keep Wisp open on the other device and make sure both are on the same Wi-Fi."
+                                   Style="{StaticResource MutedLabel}" HorizontalTextAlignment="Center" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Border Style="{StaticResource SurfaceCard}">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                            <Border WidthRequest="46" HeightRequest="46"
+                                    BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceAltLight}, Dark={StaticResource SurfaceAltDark}}"
+                                    StrokeThickness="0">
+                                <Border.StrokeShape>
+                                    <RoundRectangle CornerRadius="15" />
+                                </Border.StrokeShape>
+                                <Label FontFamily="MaterialIcons-Regular" Text="&#xE80D;" FontSize="20"
+                                       TextColor="{StaticResource Blue}" HorizontalOptions="Center"
+                                       VerticalOptions="Center" />
+                            </Border>
+                            <VerticalStackLayout Grid.Column="1" Spacing="3" VerticalOptions="Center">
+                                <Label Text="Send from any app" Style="{StaticResource SectionLabel}" />
+                                <Label Text="Share photos, videos, and documents straight into Wisp from the Android share sheet."
+                                       Style="{StaticResource MutedLabel}" />
+                            </VerticalStackLayout>
+                            <Label Grid.Column="2" FontFamily="MaterialIcons-Regular" Text="&#xE5CC;" FontSize="20"
+                                   VerticalOptions="Center"
+                                   TextColor="{AppThemeBinding Light={StaticResource FaintLight}, Dark={StaticResource FaintDark}}" />
+                        </Grid>
+                    </Border>
+                </VerticalStackLayout>
+            </ScrollView>
+
+            <!-- TRANSFERS -->
+            <ScrollView x:Name="TransfersScroll" IsVisible="False" VerticalScrollBarVisibility="Never">
+                <VerticalStackLayout Padding="18,4,18,26" Spacing="18">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <VerticalStackLayout Spacing="5">
+                            <Label Text="Transfers" Style="{StaticResource DisplayLabel}" />
+                            <Label Text="Live progress and everything that landed."
+                                   Style="{StaticResource MutedLabel}" />
+                        </VerticalStackLayout>
+                        <Button Grid.Column="1" Text="Clear" Style="{StaticResource GhostButton}"
+                                Clicked="ClearTransfers_Click" VerticalOptions="End" />
+                    </Grid>
+
+                    <Label x:Name="ActiveSectionLabel" Text="This session" Style="{StaticResource SectionLabel}" />
+                    <VerticalStackLayout x:Name="TransfersHost" Spacing="10"
+                                         BindableLayout.ItemsSource="{Binding Transfers}">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource SurfaceCard}" Padding="16">
+                                    <VerticalStackLayout Spacing="10">
+                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                                            <Border WidthRequest="42" HeightRequest="42"
+                                                    BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceAltLight}, Dark={StaticResource SurfaceAltDark}}"
+                                                    StrokeThickness="0">
+                                                <Border.StrokeShape>
+                                                    <RoundRectangle CornerRadius="14" />
+                                                </Border.StrokeShape>
+                                                <Label Text="{Binding Glyph}" FontFamily="MaterialIcons-Regular" FontSize="20"
+                                                       TextColor="{StaticResource Blue}" HorizontalOptions="Center"
+                                                       VerticalOptions="Center" />
+                                            </Border>
+                                            <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                                <Label Text="{Binding Title}" FontFamily="OpenSansSemibold"
+                                                       FontSize="14.5"
+                                                       TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}"
+                                                       LineBreakMode="TailTruncation" />
+                                                <Label Text="{Binding Status}" Style="{StaticResource TinyLabel}" />
+                                            </VerticalStackLayout>
+                                            <Border Grid.Column="2" BackgroundColor="Transparent" StrokeThickness="0"
+                                                    VerticalOptions="Center" Padding="6"
+                                                    IsVisible="{Binding ShowCancel}">
+                                                <Border.GestureRecognizers>
+                                                    <TapGestureRecognizer CommandParameter="{Binding Id}" Tapped="CancelTransfer_Tapped" />
+                                                </Border.GestureRecognizers>
+                                                <Label FontFamily="MaterialIcons-Regular" Text="&#xE5C9;" FontSize="20"
+                                                       TextColor="{StaticResource Coral}" />
+                                            </Border>
+                                        </Grid>
+                                        <ProgressBar Progress="{Binding Progress}" ProgressColor="{StaticResource Mint}"
+                                                     BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceAltLight}, Dark={StaticResource SurfaceAltDark}}"
+                                                     HeightRequest="5" />
+                                        <HorizontalStackLayout Spacing="8">
+                                            <Label Text="{Binding Speed}" Style="{StaticResource TinyLabel}" />
+                                            <Label Text="{Binding SizeText}" Style="{StaticResource TinyLabel}" />
+                                        </HorizontalStackLayout>
+                                    </VerticalStackLayout>
+                                </Border>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+
+                    <Border x:Name="TransfersEmpty" Style="{StaticResource SurfaceCard}" Padding="22">
+                        <VerticalStackLayout Spacing="10" HorizontalOptions="Center" Padding="0,10">
+                            <Label FontFamily="MaterialIcons-Regular" Text="&#xE889;" FontSize="38"
+                                   TextColor="{StaticResource Blue}" HorizontalTextAlignment="Center" />
+                            <Label Text="Nothing in motion" Style="{StaticResource SectionLabel}"
+                                   HorizontalTextAlignment="Center" />
+                            <Label Text="Send something nearby and live progress will appear here."
+                                   Style="{StaticResource MutedLabel}" HorizontalTextAlignment="Center" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Label x:Name="HistorySectionLabel" Text="History" Style="{StaticResource SectionLabel}" />
+                    <VerticalStackLayout x:Name="HistoryHost" Spacing="8"
+                                         BindableLayout.ItemsSource="{Binding History}">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource InnerCard}">
+                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                                        <Label Text="{Binding Glyph}" FontFamily="MaterialIcons-Regular" FontSize="19"
+                                               VerticalOptions="Center"
+                                               TextColor="{Binding StateBrush}" />
+                                        <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                                            <Label Text="{Binding Title}" FontFamily="OpenSansSemibold" FontSize="13.5"
+                                                   TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}"
+                                                   LineBreakMode="TailTruncation" />
+                                            <Label Text="{Binding StatusText}" Style="{StaticResource TinyLabel}"
+                                                   LineBreakMode="TailTruncation" />
+                                        </VerticalStackLayout>
+                                        <VerticalStackLayout Grid.Column="2" Spacing="1" VerticalOptions="Center"
+                                                             HorizontalOptions="End">
+                                            <Label Text="{Binding SizeText}" Style="{StaticResource TinyLabel}"
+                                                   HorizontalTextAlignment="End" />
+                                            <Label Text="{Binding WhenText}" Style="{StaticResource TinyLabel}"
+                                                   HorizontalTextAlignment="End" />
+                                        </VerticalStackLayout>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                    <Border x:Name="HistoryEmpty" Style="{StaticResource InnerCard}" IsVisible="False" Padding="18">
+                        <Label Text="Finished transfers will be remembered here."
+                               Style="{StaticResource MutedLabel}" HorizontalTextAlignment="Center" />
+                    </Border>
+                </VerticalStackLayout>
+            </ScrollView>
+
+            <!-- SETTINGS -->
+            <ScrollView x:Name="SettingsScroll" IsVisible="False" VerticalScrollBarVisibility="Never">
+                <VerticalStackLayout Padding="18,4,18,26" Spacing="18">
+                    <VerticalStackLayout x:Name="SettingsTitleBlock" Spacing="5">
+                        <Label Text="Settings" Style="{StaticResource DisplayLabel}" />
+                        <Label Text="Make Wisp feel like yours." Style="{StaticResource MutedLabel}" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout x:Name="SettingsMenuPanel" Spacing="10">
+                        <Border Style="{StaticResource SurfaceCard}" Padding="0">
+                            <VerticalStackLayout>
+                                <Grid ColumnDefinitions="*,Auto" Padding="18,16">
+                                    <VerticalStackLayout Spacing="1">
+                                        <Label Text="Appearance &amp; sounds" FontFamily="OpenSansSemibold" FontSize="14.5"
+                                               TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                                        <Label Text="Theme, device name, feedback" Style="{StaticResource TinyLabel}" />
+                                    </VerticalStackLayout>
+                                    <Label Grid.Column="1" FontFamily="MaterialIcons-Regular" Text="&#xE5CC;" FontSize="18"
+                                           TextColor="{StaticResource Mint}" VerticalOptions="Center" />
+                                    <Grid.GestureRecognizers><TapGestureRecognizer CommandParameter="general" Tapped="SettingsCategory_Tapped" /></Grid.GestureRecognizers>
+                                </Grid>
+                                <BoxView HeightRequest="1" Color="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
+                                <Grid ColumnDefinitions="*,Auto" Padding="18,16">
+                                    <VerticalStackLayout Spacing="1">
+                                        <Label Text="Transfer &amp; permissions" FontFamily="OpenSansSemibold" FontSize="14.5"
+                                               TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                                        <Label Text="Receiving, background, network access" Style="{StaticResource TinyLabel}" />
+                                    </VerticalStackLayout>
+                                    <Label Grid.Column="1" FontFamily="MaterialIcons-Regular" Text="&#xE5CC;" FontSize="18"
+                                           TextColor="{StaticResource Mint}" VerticalOptions="Center" />
+                                    <Grid.GestureRecognizers><TapGestureRecognizer CommandParameter="transfer" Tapped="SettingsCategory_Tapped" /></Grid.GestureRecognizers>
+                                </Grid>
+                                <BoxView HeightRequest="1" Color="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
+                                <Grid ColumnDefinitions="*,Auto" Padding="18,16">
+                                    <VerticalStackLayout Spacing="1">
+                                        <Label Text="Security &amp; devices" FontFamily="OpenSansSemibold" FontSize="14.5"
+                                               TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                                        <Label Text="Biometrics, identity, trusted devices" Style="{StaticResource TinyLabel}" />
+                                    </VerticalStackLayout>
+                                    <Label Grid.Column="1" FontFamily="MaterialIcons-Regular" Text="&#xE5CC;" FontSize="18"
+                                           TextColor="{StaticResource Mint}" VerticalOptions="Center" />
+                                    <Grid.GestureRecognizers><TapGestureRecognizer CommandParameter="security" Tapped="SettingsCategory_Tapped" /></Grid.GestureRecognizers>
+                                </Grid>
+                                <BoxView HeightRequest="1" Color="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
+                                <Grid ColumnDefinitions="*,Auto" Padding="18,16">
+                                    <VerticalStackLayout Spacing="1">
+                                        <Label Text="About Wisp" FontFamily="OpenSansSemibold" FontSize="14.5"
+                                               TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                                        <Label Text="Version, protocol, privacy" Style="{StaticResource TinyLabel}" />
+                                    </VerticalStackLayout>
+                                    <Label Grid.Column="1" FontFamily="MaterialIcons-Regular" Text="&#xE5CC;" FontSize="18"
+                                           TextColor="{StaticResource Mint}" VerticalOptions="Center" />
+                                    <Grid.GestureRecognizers><TapGestureRecognizer CommandParameter="about" Tapped="SettingsCategory_Tapped" /></Grid.GestureRecognizers>
+                                </Grid>
+                            </VerticalStackLayout>
+                        </Border>
+                    </VerticalStackLayout>
+
+                    <Grid x:Name="SettingsDetailHeader" IsVisible="False" ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                        <Button Text="&#xE5C4;" FontFamily="MaterialIcons-Regular" Style="{StaticResource GhostButton}"
+                                WidthRequest="42" Padding="0" Clicked="SettingsBack_Click" AutomationProperties.Name="Back" />
+                        <Label x:Name="SettingsCategoryTitle" Grid.Column="1" Text="Settings" Style="{StaticResource TitleLabel}"
+                               VerticalOptions="Center" />
+                    </Grid>
+
+                    <!-- Appearance -->
+                    <Border x:Name="AppearanceCard" Style="{StaticResource SurfaceCard}">
+                        <VerticalStackLayout Spacing="14">
+                            <Label Text="Appearance" Style="{StaticResource SectionLabel}" />
+                            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+                                <Border x:Name="ThemeSystemPill" Padding="10,10" StrokeThickness="1"
+                                        StrokeShape="RoundRectangle 14"
+                                        Stroke="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}">
+                                    <Border.GestureRecognizers>
+                                        <TapGestureRecognizer CommandParameter="system" Tapped="ThemePill_Tapped" />
+                                    </Border.GestureRecognizers>
+                                    <Label x:Name="ThemeSystemText" Text="System" FontFamily="OpenSansSemibold"
+                                           FontSize="12.5" HorizontalTextAlignment="Center"
+                                           TextColor="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                                </Border>
+                                <Border x:Name="ThemeLightPill" Grid.Column="1" Padding="10,10" StrokeThickness="1"
+                                        StrokeShape="RoundRectangle 14"
+                                        Stroke="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}">
+                                    <Border.GestureRecognizers>
+                                        <TapGestureRecognizer CommandParameter="light" Tapped="ThemePill_Tapped" />
+                                    </Border.GestureRecognizers>
+                                    <Label x:Name="ThemeLightText" Text="Light" FontFamily="OpenSansSemibold"
+                                           FontSize="12.5" HorizontalTextAlignment="Center"
+                                           TextColor="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                                </Border>
+                                <Border x:Name="ThemeDarkPill" Grid.Column="2" Padding="10,10" StrokeThickness="1"
+                                        StrokeShape="RoundRectangle 14"
+                                        Stroke="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}">
+                                    <Border.GestureRecognizers>
+                                        <TapGestureRecognizer CommandParameter="dark" Tapped="ThemePill_Tapped" />
+                                    </Border.GestureRecognizers>
+                                    <Label x:Name="ThemeDarkText" Text="Dark" FontFamily="OpenSansSemibold"
+                                           FontSize="12.5" HorizontalTextAlignment="Center"
+                                           TextColor="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                                </Border>
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- Feedback -->
+                    <Border x:Name="FeedbackCard" Style="{StaticResource SurfaceCard}">
+                        <VerticalStackLayout Spacing="4">
+                            <Label Text="Feedback" Style="{StaticResource SectionLabel}" Margin="0,0,0,6" />
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" Padding="0,6">
+                                <Label FontFamily="MaterialIcons-Regular" Text="&#xE050;" FontSize="20" VerticalOptions="Center"
+                                       TextColor="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                                <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                                    <Label Text="Sounds" Style="{StaticResource RowLabel}" />
+                                    <Label Text="Connect, disconnect, and transfer chimes" Style="{StaticResource TinyLabel}" />
+                                </VerticalStackLayout>
+                                <Switch x:Name="SoundsSwitch" Grid.Column="2" OnColor="{StaticResource Mint}" ThumbColor="White"
+                                        Toggled="SoundsToggled" HorizontalOptions="End" />
+                            </Grid>
+                            <BoxView HeightRequest="1"
+                                     Color="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" Padding="0,6">
+                                <Label FontFamily="MaterialIcons-Regular" Text="&#xE7F7;" FontSize="20" VerticalOptions="Center"
+                                       TextColor="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                                <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                                    <Label Text="Notifications" Style="{StaticResource RowLabel}" />
+                                    <Label Text="Progress in the notification panel and result alerts" Style="{StaticResource TinyLabel}" />
+                                </VerticalStackLayout>
+                                <Switch x:Name="NotificationsSwitch" Grid.Column="2" OnColor="{StaticResource Mint}" ThumbColor="White"
+                                        Toggled="NotificationsToggled" HorizontalOptions="End" />
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- Receiving -->
+                    <Border x:Name="ReceivingCard" Style="{StaticResource SurfaceCard}">
+                        <VerticalStackLayout Spacing="4">
+                            <Label Text="Receiving" Style="{StaticResource SectionLabel}" Margin="0,0,0,6" />
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" Padding="0,6">
+                                <Label FontFamily="MaterialIcons-Regular" Text="&#xE86C;" FontSize="20" VerticalOptions="Center"
+                                       TextColor="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                                <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                                    <Label Text="Auto-accept trusted devices" Style="{StaticResource RowLabel}" />
+                                    <Label Text="New devices always ask first" Style="{StaticResource TinyLabel}" />
+                                </VerticalStackLayout>
+                                <Switch x:Name="AutoAcceptSwitch" Grid.Column="2" OnColor="{StaticResource Mint}" ThumbColor="White"
+                                        Toggled="AutoAcceptToggled" HorizontalOptions="End" />
+                            </Grid>
+                            <BoxView HeightRequest="1"
+                                     Color="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" Padding="0,6">
+                                <Label FontFamily="MaterialIcons-Regular" Text="&#xE2C8;" FontSize="20" VerticalOptions="Center"
+                                       TextColor="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                                <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                                    <Label Text="Received files" Style="{StaticResource RowLabel}" />
+                                    <Label x:Name="SaveFolderLabel" Text="—"
+                                           Style="{StaticResource TinyLabel}" LineBreakMode="MiddleTruncation" />
+                                </VerticalStackLayout>
+                            </Grid>
+                            <Label Text="A copy is also placed in Downloads/Wisp when you accept a transfer."
+                                   Style="{StaticResource TinyLabel}" Margin="46,2,0,4" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- Security -->
+                    <Border x:Name="SecurityCard" Style="{StaticResource SurfaceCard}">
+                        <VerticalStackLayout Spacing="4">
+                            <Label Text="Security" Style="{StaticResource SectionLabel}" Margin="0,0,0,6" />
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" Padding="0,6">
+                                <Label FontFamily="MaterialIcons-Regular" Text="&#xE8E8;" FontSize="20" VerticalOptions="Center"
+                                       TextColor="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                                <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                                    <Label Text="Biometrics to accept files" Style="{StaticResource RowLabel}" />
+                                    <Label Text="Confirm before accepting incoming files" Style="{StaticResource TinyLabel}" />
+                                </VerticalStackLayout>
+                                <Switch x:Name="BiometricAcceptSwitch" Grid.Column="2" OnColor="{StaticResource Mint}"
+                                        ThumbColor="White" Toggled="BiometricAcceptToggled" HorizontalOptions="End" />
+                            </Grid>
+                            <BoxView HeightRequest="1"
+                                     Color="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}" />
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" Padding="0,6">
+                                <Label FontFamily="MaterialIcons-Regular" Text="&#xE897;" FontSize="20" VerticalOptions="Center"
+                                       TextColor="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                                <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                                    <Label Text="Biometrics to open Wisp" Style="{StaticResource RowLabel}" />
+                                    <Label Text="Lock the app whenever it starts" Style="{StaticResource TinyLabel}" />
+                                </VerticalStackLayout>
+                                <Switch x:Name="BiometricUnlockSwitch" Grid.Column="2" OnColor="{StaticResource Mint}"
+                                        ThumbColor="White" Toggled="BiometricUnlockToggled" HorizontalOptions="End" />
+                            </Grid>
+                            <Label Text="Uses Android BiometricPrompt, with your device screen lock as fallback. Wisp never sees biometric data."
+                                   Style="{StaticResource TinyLabel}" Margin="46,2,0,4" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- This device -->
+                    <Border x:Name="ThisDeviceCard" Style="{StaticResource SurfaceCard}">
+                        <VerticalStackLayout Spacing="14">
+                            <Label Text="This device" Style="{StaticResource SectionLabel}" />
+                            <VerticalStackLayout Spacing="6">
+                                <Label Text="DEVICE NAME" Style="{StaticResource TinyLabel}" />
+                                <Entry x:Name="DeviceNameEntry" Style="{StaticResource FormEntry}"
+                                       Placeholder="e.g. Pixel 9" />
+                            </VerticalStackLayout>
+                            <HorizontalStackLayout Spacing="10">
+                                <Button Text="Save &amp; restart" Style="{StaticResource PrimaryButton}"
+                                        HeightRequest="44" Clicked="ApplySettings_Click" />
+                                <Label x:Name="SettingsStatusLabel" Text="" Style="{StaticResource TinyLabel}"
+                                       VerticalOptions="Center" />
+                            </HorizontalStackLayout>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- Identity -->
+                    <Border x:Name="IdentityCard" Style="{StaticResource SurfaceCard}">
+                        <VerticalStackLayout Spacing="10">
+                            <Label Text="Identity" Style="{StaticResource SectionLabel}" />
+                            <Label Text="PEER ID" Style="{StaticResource TinyLabel}" />
+                            <Label x:Name="PeerIdLabel" Text="—" FontSize="12" FontFamily="OpenSansRegular"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}"
+                                   LineBreakMode="CharacterWrap" />
+                            <Label Text="TLS FINGERPRINT" Style="{StaticResource TinyLabel}" />
+                            <Label x:Name="FingerprintLabel" Text="—" FontSize="10.5"
+                                   TextColor="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}"
+                                   LineBreakMode="CharacterWrap" />
+                            <Button Text="Copy peer ID" Style="{StaticResource SecondaryButton}"
+                                    HeightRequest="42" Clicked="CopyPeerId_Click" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- Trusted devices -->
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label x:Name="TrustedHeaderLabel" Text="Trusted devices" Style="{StaticResource SectionLabel}" />
+                        <Label x:Name="TrustedCountLabel" Grid.Column="1" Text=""
+                               Style="{StaticResource TinyLabel}" VerticalOptions="Center" />
+                    </Grid>
+                    <VerticalStackLayout x:Name="TrustedHost" Spacing="8"
+                                         BindableLayout.ItemsSource="{Binding Trusted}">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource InnerCard}">
+                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                                        <Border WidthRequest="42" HeightRequest="42" Background="{Binding AvatarBrush}">
+                                            <Border.StrokeShape>
+                                                <RoundRectangle CornerRadius="14" />
+                                            </Border.StrokeShape>
+                                            <Label Text="{Binding Initials}" FontFamily="OpenSansSemibold"
+                                                   FontSize="12" TextColor="{StaticResource OnAccent}"
+                                                   HorizontalOptions="Center" VerticalOptions="Center" />
+                                        </Border>
+                                        <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                            <Label Text="{Binding Name}" FontFamily="OpenSansSemibold" FontSize="14"
+                                                   TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                                            <Label Text="{Binding Fingerprint}" FontSize="9.5"
+                                                   TextColor="{AppThemeBinding Light={StaticResource FaintLight}, Dark={StaticResource FaintDark}}"
+                                                   LineBreakMode="MiddleTruncation" />
+                                        </VerticalStackLayout>
+                                        <Border Grid.Column="2" BackgroundColor="Transparent" StrokeThickness="0"
+                                                Padding="6" VerticalOptions="Center">
+                                            <Border.GestureRecognizers>
+                                                <TapGestureRecognizer CommandParameter="{Binding Fingerprint}" Tapped="ForgetTrusted_Tapped" />
+                                            </Border.GestureRecognizers>
+                                            <Label FontFamily="MaterialIcons-Regular" Text="&#xE92E;" FontSize="19"
+                                                   TextColor="{StaticResource Coral}" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                    <Border x:Name="TrustedEmpty" Style="{StaticResource InnerCard}" IsVisible="False" Padding="18">
+                        <Label Text="No trusted devices yet. Choose “Trust this device” when accepting a transfer."
+                               Style="{StaticResource MutedLabel}" HorizontalTextAlignment="Center" />
+                    </Border>
+
+                    <!-- Permissions -->
+                    <Border x:Name="PermissionsCard" Style="{StaticResource SurfaceCard}">
+                        <VerticalStackLayout Spacing="9">
+                            <Label Text="Permissions &amp; background" Style="{StaticResource SectionLabel}" />
+                            <Label Text="Wisp uses notifications, nearby Wi-Fi/local network access, and a foreground service so transfers can continue while the screen is off."
+                                   Style="{StaticResource MutedLabel}" />
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                <Button Text="Grant permissions" Style="{StaticResource PrimaryButton}"
+                                        HeightRequest="42" FontSize="13" Clicked="GrantPermissions_Click" />
+                                <Button Grid.Column="1" Text="App settings" Style="{StaticResource SecondaryButton}"
+                                        HeightRequest="42" FontSize="13" Clicked="OpenAppSettings_Click" />
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- About -->
+                    <Border x:Name="AboutCard" Style="{StaticResource SurfaceCard}">
+                        <VerticalStackLayout Spacing="7">
+                            <Label Text="About" Style="{StaticResource SectionLabel}" />
+                            <Label x:Name="AboutLabel" Text="Wisp" Style="{StaticResource MutedLabel}" />
+                            <Label Text="Local-first transfer. No account, no cloud relay, no analytics. TLS 1.3 in transit and SHA-256 verification for every chunk."
+                                   Style="{StaticResource TinyLabel}" />
+                            <Label Text="Tip: add the Wisp widget to your home screen for transfer status at a glance."
+                                   Style="{StaticResource TinyLabel}" />
+                        </VerticalStackLayout>
+                    </Border>
+                </VerticalStackLayout>
+            </ScrollView>
+
+            <!-- Toast -->
+            <Border x:Name="ToastBanner" IsVisible="False" HorizontalOptions="Center"
+                    VerticalOptions="Start" Margin="18,6,18,0" Padding="16,11"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceAltDark}}"
+                    StrokeThickness="1" Stroke="{StaticResource MintBrush}"
+                    StrokeShape="RoundRectangle 16" ZIndex="5">
+                <HorizontalStackLayout Spacing="9">
+                    <Label x:Name="ToastIcon" FontFamily="MaterialIcons-Regular" Text="&#xE86C;" FontSize="16"
+                           TextColor="{StaticResource Mint}" VerticalOptions="Center" />
+                    <Label x:Name="ToastLabel" Text="" FontSize="12.5" MaxLines="3"
+                           TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                </HorizontalStackLayout>
+            </Border>
+        </Grid>
+
+        <!-- ── Floating nav pill ───────────────────────────────────── -->
+        <Border Grid.Row="2" Margin="18,0,18,18" Padding="7"
+                BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}"
+                Stroke="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}"
+                StrokeThickness="1" StrokeShape="RoundRectangle 26">
+            <Border.Shadow>
+                <Shadow Brush="#000000" Opacity="0.35" Radius="24" Offset="0,8" />
+            </Border.Shadow>
+            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="4" Padding="3">
+                <Border x:Name="NavNearbyPill" BackgroundColor="{StaticResource Mint}" StrokeThickness="0"
+                        StrokeShape="RoundRectangle 20" Padding="4">
+                    <VerticalStackLayout Spacing="1" HorizontalOptions="Center">
+                        <Label FontFamily="MaterialIcons-Regular" Text="&#xE1B1;" FontSize="19" TextColor="{StaticResource OnAccent}"
+                               HorizontalTextAlignment="Center" x:Name="NavNearbyIcon" />
+                        <Label Text="Nearby" FontFamily="OpenSansSemibold" FontSize="10.5" x:Name="NavNearbyText"
+                               TextColor="{StaticResource OnAccent}" HorizontalTextAlignment="Center" />
+                    </VerticalStackLayout>
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="NavNearby_Tapped" NumberOfTapsRequired="1" />
+                    </Border.GestureRecognizers>
+                </Border>
+                <Border x:Name="NavTransfersPill" Grid.Column="1" BackgroundColor="Transparent" StrokeThickness="0"
+                        StrokeShape="RoundRectangle 20" Padding="4">
+                    <VerticalStackLayout Spacing="1" HorizontalOptions="Center">
+                        <Label FontFamily="MaterialIcons-Regular" Text="&#xE889;" FontSize="19" x:Name="NavTransfersIcon"
+                               HorizontalTextAlignment="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource FaintLight}, Dark={StaticResource FaintDark}}" />
+                        <Label Text="Transfers" FontFamily="OpenSansSemibold" FontSize="10.5" x:Name="NavTransfersText"
+                               HorizontalTextAlignment="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource FaintLight}, Dark={StaticResource FaintDark}}" />
+                    </VerticalStackLayout>
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="NavTransfers_Tapped" NumberOfTapsRequired="1" />
+                    </Border.GestureRecognizers>
+                </Border>
+                <Border x:Name="NavSettingsPill" Grid.Column="2" BackgroundColor="Transparent" StrokeThickness="0"
+                        StrokeShape="RoundRectangle 20" Padding="4">
+                    <VerticalStackLayout Spacing="1" HorizontalOptions="Center">
+                        <Label FontFamily="MaterialIcons-Regular" Text="&#xE8B8;" FontSize="19" x:Name="NavSettingsIcon"
+                               HorizontalTextAlignment="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource FaintLight}, Dark={StaticResource FaintDark}}" />
+                        <Label Text="Settings" FontFamily="OpenSansSemibold" FontSize="10.5" x:Name="NavSettingsText"
+                               HorizontalTextAlignment="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource FaintLight}, Dark={StaticResource FaintDark}}" />
+                    </VerticalStackLayout>
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="NavSettings_Tapped" NumberOfTapsRequired="1" />
+                    </Border.GestureRecognizers>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- Incoming offer sheet -->
+        <Grid x:Name="OfferOverlay" Grid.RowSpan="3" IsVisible="False"
+              BackgroundColor="#C40B0E12" ZIndex="20">
+            <Border VerticalOptions="End" Margin="14,0,14,18" Padding="20"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}"
+                    Stroke="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}"
+                    StrokeThickness="1" StrokeShape="RoundRectangle 30">
+                <VerticalStackLayout Spacing="15">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                        <Border x:Name="OfferAvatar" WidthRequest="54" HeightRequest="54" Background="{StaticResource AvatarFallback}">
+                            <Border.StrokeShape>
+                                <RoundRectangle CornerRadius="18" />
+                            </Border.StrokeShape>
+                            <Label x:Name="OfferInitials" Text="?" FontFamily="OpenSansSemibold"
+                                   FontSize="15" TextColor="{StaticResource OnAccent}"
+                                   HorizontalOptions="Center" VerticalOptions="Center" />
+                        </Border>
+                        <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                            <Label x:Name="OfferPeerLabel" Text="Nearby device" Style="{StaticResource SectionLabel}"
+                                   LineBreakMode="TailTruncation" />
+                            <Label x:Name="OfferSummaryLabel" Text="Incoming files" Style="{StaticResource MutedLabel}" />
+                        </VerticalStackLayout>
+                        <Label Grid.Column="2" FontFamily="MaterialIcons-Regular" Text="&#xE896;" FontSize="24"
+                               TextColor="{StaticResource Mint}" VerticalOptions="Center" />
+                    </Grid>
+                    <Border Style="{StaticResource InnerCard}" Padding="14,12">
+                        <Label x:Name="OfferFilesLabel" Style="{StaticResource TinyLabel}"
+                               LineBreakMode="TailTruncation" MaxLines="3" />
+                    </Border>
+                    <Border Padding="16,12" BackgroundColor="{StaticResource MintSoft}"
+                            Stroke="{StaticResource MintBrush}" StrokeThickness="1"
+                            StrokeShape="RoundRectangle 16">
+                        <VerticalStackLayout Spacing="3">
+                            <Label Text="VERIFY THIS CODE ON THE OTHER DEVICE" Style="{StaticResource TinyLabel}"
+                                   FontSize="9.5" TextColor="{StaticResource Mint}" />
+                            <Label x:Name="OfferCodeLabel" Text="------" FontSize="26"
+                                   FontFamily="OpenSansSemibold" CharacterSpacing="6"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                        </VerticalStackLayout>
+                    </Border>
+                    <HorizontalStackLayout Spacing="10">
+                        <Switch x:Name="OfferTrustSwitch" OnColor="{StaticResource Mint}" ThumbColor="White" VerticalOptions="Center" />
+                        <Label Text="Trust this device" Style="{StaticResource MutedLabel}" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                        <Button Text="Decline" Style="{StaticResource SecondaryButton}" Clicked="DeclineOffer_Click" />
+                        <Button Grid.Column="1" Text="Accept" Style="{StaticResource PrimaryButton}" Clicked="AcceptOffer_Click" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+        <!-- AirDrop-style send sheet -->
+        <Grid x:Name="ShareSheetOverlay" Grid.RowSpan="3" IsVisible="False"
+              BackgroundColor="#C40B0E12" ZIndex="21">
+            <Border VerticalOptions="End" Margin="14,0,14,18" Padding="20"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}"
+                    Stroke="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}"
+                    StrokeThickness="1" StrokeShape="RoundRectangle 30">
+                <VerticalStackLayout Spacing="14">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <VerticalStackLayout Spacing="2">
+                            <Label Text="Send with Wisp" Style="{StaticResource SectionLabel}" />
+                            <Label x:Name="ShareSummaryLabel" Text="Choose a nearby device" Style="{StaticResource MutedLabel}" />
+                        </VerticalStackLayout>
+                        <Button Grid.Column="1" Text="&#xE5CD;" FontFamily="MaterialIcons-Regular"
+                                Style="{StaticResource GhostButton}" WidthRequest="42" Padding="0"
+                                Clicked="CloseShareSheet_Click" AutomationProperties.Name="Close" />
+                    </Grid>
+                    <Border Style="{StaticResource InnerCard}" Padding="12,10">
+                        <Label x:Name="ShareFilesLabel" Style="{StaticResource TinyLabel}"
+                               LineBreakMode="TailTruncation" MaxLines="3" />
+                    </Border>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="Nearby devices" Style="{StaticResource SectionLabel}" VerticalOptions="Center" />
+                        <ActivityIndicator x:Name="ShareScanSpinner" Grid.Column="1" IsRunning="True"
+                                           Color="{StaticResource Mint}" WidthRequest="20" HeightRequest="20" />
+                    </Grid>
+                    <ScrollView MaximumHeightRequest="300">
+                        <VerticalStackLayout x:Name="SharePeersHost" Spacing="8"
+                                             BindableLayout.ItemsSource="{Binding Peers}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Style="{StaticResource InnerCard}">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer CommandParameter="{Binding Id}" Tapped="SharePeer_Tapped" />
+                                        </Border.GestureRecognizers>
+                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                                            <Border WidthRequest="46" HeightRequest="46" Background="{Binding AvatarBrush}">
+                                                <Border.StrokeShape><RoundRectangle CornerRadius="15" /></Border.StrokeShape>
+                                                <Label Text="{Binding Initials}" FontFamily="OpenSansSemibold"
+                                                       FontSize="13" TextColor="{StaticResource OnAccent}"
+                                                       HorizontalOptions="Center" VerticalOptions="Center" />
+                                            </Border>
+                                            <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
+                                                <Label Text="{Binding Name}" FontFamily="OpenSansSemibold" FontSize="14"
+                                                       TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}"
+                                                       LineBreakMode="TailTruncation" />
+                                                <Label Text="{Binding Subtitle}" Style="{StaticResource TinyLabel}" />
+                                            </VerticalStackLayout>
+                                            <Label Grid.Column="2" FontFamily="MaterialIcons-Regular" Text="&#xE5CC;"
+                                                   FontSize="19" TextColor="{StaticResource Mint}"
+                                                   VerticalOptions="Center" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
+                    </ScrollView>
+                    <HorizontalStackLayout Spacing="8" HorizontalOptions="Center" x:Name="ShareEmptyLabel">
+                        <Label FontFamily="MaterialIcons-Regular" Text="&#xE1B1;" FontSize="16"
+                               TextColor="{StaticResource MutedDark}" VerticalOptions="Center" />
+                        <Label Text="Scanning for nearby devices…" Style="{StaticResource MutedLabel}"
+                               VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+                    <Button Text="Cancel" Style="{StaticResource GhostButton}" Clicked="CloseShareSheet_Click" />
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+
+        <!-- Live transfer sheet -->
+        <Grid x:Name="TransferOverlay" Grid.RowSpan="3" IsVisible="False"
+              BackgroundColor="#C40B0E12" ZIndex="22">
+            <Border VerticalOptions="End" Margin="14,0,14,18" Padding="20"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}"
+                    Stroke="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}"
+                    StrokeThickness="1" StrokeShape="RoundRectangle 30">
+                <VerticalStackLayout Spacing="14">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="13">
+                        <Border WidthRequest="48" HeightRequest="48" BackgroundColor="{StaticResource MintSoft}" StrokeThickness="0">
+                            <Border.StrokeShape><RoundRectangle CornerRadius="16" /></Border.StrokeShape>
+                            <Label x:Name="TransferGlyph" FontFamily="MaterialIcons-Regular" Text="&#xE5D8;"
+                                   FontSize="22" TextColor="{StaticResource Mint}"
+                                   HorizontalOptions="Center" VerticalOptions="Center" />
+                        </Border>
+                        <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                            <Label x:Name="TransferPeerLabel" Text="Transfer" Style="{StaticResource SectionLabel}"
+                                   LineBreakMode="TailTruncation" />
+                            <Label x:Name="TransferStateLabel" Text="Connecting…" Style="{StaticResource MutedLabel}" />
+                        </VerticalStackLayout>
+                        <Button Grid.Column="2" Text="&#xE931;" FontFamily="MaterialIcons-Regular"
+                                Style="{StaticResource GhostButton}" WidthRequest="42" Padding="0"
+                                Clicked="MinimizeTransfer_Click" AutomationProperties.Name="Minimize" />
+                    </Grid>
+                    <ProgressBar x:Name="TransferProgressBar" Progress="0" ProgressColor="{StaticResource Mint}"
+                                 BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceAltLight}, Dark={StaticResource SurfaceAltDark}}"
+                                 HeightRequest="7" />
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label x:Name="TransferSpeedLabel" Text="" Style="{StaticResource TinyLabel}" />
+                        <Label x:Name="TransferPercentLabel" Grid.Column="1" Text="0%" Style="{StaticResource TinyLabel}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                        <Button x:Name="TransferActionButton" Text="Cancel" Style="{StaticResource SecondaryButton}"
+                                Clicked="TransferAction_Click" />
+                        <Button Grid.Column="1" Text="Minimize" Style="{StaticResource PrimaryButton}"
+                                Clicked="MinimizeTransfer_Click" />
+                    </Grid>
+                    <Label Text="Progress also appears in your notification panel. You can minimize this sheet and keep sending."
+                           Style="{StaticResource TinyLabel}" HorizontalTextAlignment="Center" />
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+
+        <!-- Minimized live progress -->
+        <Border x:Name="MiniProgressPill" Grid.Row="2" IsVisible="False" ZIndex="18"
+                Margin="24,0,24,86" Padding="12,9" HorizontalOptions="Center"
+                BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceAltDark}}"
+                Stroke="{StaticResource MintBrush}" StrokeThickness="1"
+                StrokeShape="RoundRectangle 18">
+            <Border.GestureRecognizers>
+                <TapGestureRecognizer Tapped="RestoreTransferOverlay_Tapped" />
+            </Border.GestureRecognizers>
+            <Grid ColumnDefinitions="Auto,130,Auto" ColumnSpacing="10">
+                <Label x:Name="MiniProgressGlyph" FontFamily="MaterialIcons-Regular" Text="&#xE5D8;"
+                       FontSize="16" TextColor="{StaticResource Mint}" VerticalOptions="Center" />
+                <ProgressBar x:Name="MiniProgressBar" Grid.Column="1" Progress="0"
+                             ProgressColor="{StaticResource Mint}" HeightRequest="4" VerticalOptions="Center" />
+                <Label x:Name="MiniProgressLabel" Grid.Column="2" Text="0%" FontFamily="OpenSansSemibold"
+                       FontSize="11" TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}"
+                       VerticalOptions="Center" />
+            </Grid>
+        </Border>
+
+        <!-- App biometric lock -->
+        <Grid x:Name="LockOverlay" Grid.RowSpan="3" IsVisible="False"
+              BackgroundColor="{StaticResource InkDark}" ZIndex="30">
+            <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="14" Padding="32">
+                <Border WidthRequest="84" HeightRequest="84" Background="{StaticResource Aurora}"
+                        HorizontalOptions="Center">
+                    <Border.StrokeShape><RoundRectangle CornerRadius="28" /></Border.StrokeShape>
+                    <Label Text="w" FontFamily="OpenSansSemibold" FontSize="34"
+                           TextColor="{StaticResource OnAccent}"
+                           HorizontalOptions="Center" VerticalOptions="Center" />
+                </Border>
+                <Label Text="Wisp is locked" Style="{StaticResource TitleLabel}" HorizontalTextAlignment="Center" />
+                <Label Text="Confirm your identity to open Wisp and see nearby transfers."
+                       Style="{StaticResource MutedLabel}" HorizontalTextAlignment="Center" />
+                <Button Text="Unlock" Style="{StaticResource PrimaryButton}" WidthRequest="180"
+                        Clicked="UnlockApp_Click" />
+            </VerticalStackLayout>
+        </Grid>
+
+        <!-- First-run onboarding -->
+        <Grid x:Name="OnboardingOverlay" Grid.RowSpan="3" IsVisible="False" ZIndex="40"
+              BackgroundColor="{AppThemeBinding Light={StaticResource InkLight}, Dark={StaticResource InkDark}}">
+            <ScrollView>
+                <VerticalStackLayout Padding="24,64,24,32" Spacing="22">
+                    <Border WidthRequest="76" HeightRequest="76" Background="{StaticResource Aurora}"
+                            HorizontalOptions="Center">
+                        <Border.StrokeShape><RoundRectangle CornerRadius="25" /></Border.StrokeShape>
+                        <Label Text="w" FontFamily="OpenSansSemibold" FontSize="34"
+                               TextColor="{StaticResource OnAccent}"
+                               HorizontalOptions="Center" VerticalOptions="Center" />
+                    </Border>
+                    <VerticalStackLayout Spacing="6">
+                        <Label Text="Welcome to Wisp" Style="{StaticResource DisplayLabel}"
+                               HorizontalTextAlignment="Center" />
+                        <Label Text="Files, directly between nearby devices. No account. No cloud. No setup."
+                               Style="{StaticResource MutedLabel}" HorizontalTextAlignment="Center" />
+                    </VerticalStackLayout>
+                    <Border Style="{StaticResource SurfaceCard}" Padding="16">
+                        <VerticalStackLayout Spacing="16">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                                <Label FontFamily="MaterialIcons-Regular" Text="&#xE1B1;" FontSize="22"
+                                       TextColor="{StaticResource Mint}" VerticalOptions="Center" />
+                                <VerticalStackLayout Grid.Column="1" Spacing="1">
+                                    <Label Text="See who is nearby" FontFamily="OpenSansSemibold" FontSize="14"
+                                           TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                                    <Label Text="Share from any app and pick a device." Style="{StaticResource TinyLabel}" />
+                                </VerticalStackLayout>
+                            </Grid>
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                                <Label FontFamily="MaterialIcons-Regular" Text="&#xE8E8;" FontSize="22"
+                                       TextColor="{StaticResource Mint}" VerticalOptions="Center" />
+                                <VerticalStackLayout Grid.Column="1" Spacing="1">
+                                    <Label Text="Private by design" FontFamily="OpenSansSemibold" FontSize="14"
+                                           TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                                    <Label Text="TLS 1.3, a pairing code, and a pinned device key." Style="{StaticResource TinyLabel}" />
+                                </VerticalStackLayout>
+                            </Grid>
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+                                <Label FontFamily="MaterialIcons-Regular" Text="&#xE050;" FontSize="22"
+                                       TextColor="{StaticResource Mint}" VerticalOptions="Center" />
+                                <VerticalStackLayout Grid.Column="1" Spacing="1">
+                                    <Label Text="Live progress, background transfers" FontFamily="OpenSansSemibold" FontSize="14"
+                                           TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                                    <Label Text="Minimize the transfer and follow it in notifications." Style="{StaticResource TinyLabel}" />
+                                </VerticalStackLayout>
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+                    <Button Text="Enable permissions" Style="{StaticResource SecondaryButton}"
+                            Clicked="OnboardingPermissions_Click" />
+                    <Button Text="Get started" Style="{StaticResource PrimaryButton}"
+                            Clicked="FinishOnboarding_Click" />
+                    <Label Text="You can change permissions, theme, sounds, and security later in Settings."
+                           Style="{StaticResource TinyLabel}" HorizontalTextAlignment="Center" />
+                </VerticalStackLayout>
+            </ScrollView>
+        </Grid>
+
+    </Grid>
+</ContentPage>
