@@ -1,0 +1,62 @@
+# Build output
+/build/
+bin/
+obj/
+[Oo]ut/
+*.apk
+*.aab
+*.appx
+*.msix
+*.msixbundle
+*.msi
+
+# .NET / Visual Studio
+.vs/
+*.user
+*.suo
+*.sln.docstates
+*.csproj.user
+.vscode/
+.idea/
+
+# Native
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.dll
+*.so
+*.a
+*.dylib
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+
+# Signing material
+*.pfx
+*.p12
+*.keystore
+*.jks
+
+# Local logs and test artifacts
+*.log
+TestResults/
+.wisp-*
+*.wisp-*.part
+
+# OS / tools
+.DS_Store
+Thumbs.db
+desktop.ini
+wisp-tools/
+android_openssl/
+
+# Distribution artifacts and bundled installers
+/dist/
+/installer/deps/
+
+# Local agent/tooling data
+/.zcode/
+/northstar/
