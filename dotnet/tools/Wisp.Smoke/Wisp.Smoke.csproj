@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <NativeBinDir>$(MSBuildThisFileDirectory)..\..\..\build\native\bin\</NativeBinDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Wisp.Core\Wisp.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="$(NativeBinDir)wisp_core.dll" Link="wisp_core.dll" CopyToOutputDirectory="PreserveNewest" Condition="Exists('$(NativeBinDir)wisp_core.dll')" />
+    <None Include="$(NativeBinDir)libssl-3-x64.dll" Link="libssl-3-x64.dll" CopyToOutputDirectory="PreserveNewest" Condition="Exists('$(NativeBinDir)libssl-3-x64.dll')" />
+    <None Include="$(NativeBinDir)libcrypto-3-x64.dll" Link="libcrypto-3-x64.dll" CopyToOutputDirectory="PreserveNewest" Condition="Exists('$(NativeBinDir)libcrypto-3-x64.dll')" />
+  </ItemGroup>
+</Project>

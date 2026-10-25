@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>Wisp.Windows</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Wisp</AssemblyName>
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
+    <NativeBinDir>$(MSBuildThisFileDirectory)..\..\..\build\native\bin\</NativeBinDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2705" />
+    <PackageReference Include="H.NotifyIcon.WinUI" Version="2.4.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Wisp.Core\Wisp.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="$(NativeBinDir)wisp_core.dll" Link="wisp_core.dll" CopyToOutputDirectory="PreserveNewest" Condition="Exists('$(NativeBinDir)wisp_core.dll')" />
+    <None Include="$(NativeBinDir)libssl-3-x64.dll" Link="libssl-3-x64.dll" CopyToOutputDirectory="PreserveNewest" Condition="Exists('$(NativeBinDir)libssl-3-x64.dll')" />
+    <None Include="$(NativeBinDir)libcrypto-3-x64.dll" Link="libcrypto-3-x64.dll" CopyToOutputDirectory="PreserveNewest" Condition="Exists('$(NativeBinDir)libcrypto-3-x64.dll')" />
+    <Content Include="Assets\Sounds\*.wav" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\AppIcon.ico" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
