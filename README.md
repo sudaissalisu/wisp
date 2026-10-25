@@ -172,10 +172,9 @@ Binaries are published as GitHub release assets because they are too large for
 the repository (the installer exceeds GitHub's normal file limit).
 
 - [Wisp v0.1.0 release](https://github.com/sudaissalisu/wisp/releases/tag/v0.1.0)
-- Android sideload APK: `Wisp-android-0.1.0.apk` (debug-signed, universal)
-- Windows installer: `Wisp-Setup-0.1.0.exe` (bundles the .NET and Windows App
-  Runtime prerequisites)
-- Portable Windows build: `Wisp-Windows-x64-0.1.0.zip` (requires both runtimes)
+- [Android APK](https://github.com/sudaissalisu/wisp/releases/download/v0.1.0/Wisp-android-0.1.0.apk) — debug-signed, universal
+- [Windows installer](https://github.com/sudaissalisu/wisp/releases/download/v0.1.0/Wisp-Setup-0.1.0.exe) — bundles the .NET and Windows App Runtime prerequisites
+- [Portable Windows build](https://github.com/sudaissalisu/wisp/releases/download/v0.1.0/Wisp-Windows-x64-0.1.0.zip) — requires both runtimes
 
 The Windows installer requests administrator rights for the runtime installers.
 The Android APK is self-contained and does not need Fast Deployment.
