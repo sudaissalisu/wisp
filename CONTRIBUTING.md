@@ -28,6 +28,13 @@
 - Keep UI wording short and avoid promising measurements or security properties
   the code does not verify.
 
+## License
+
+Wisp is a project by SSM Limited and is released under the [MIT License](LICENSE).
+By submitting a contribution you agree that it is licensed under the same terms.
+Third-party code must be compatible with MIT and recorded in
+`THIRD_PARTY_NOTICES.md`.
+
 ## Commit messages
 
 Use imperative, descriptive messages, for example:

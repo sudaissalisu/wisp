@@ -1,6 +1,6 @@
 # Testing notes
 
-Last updated: 2026-10-24
+Last updated: 2026-10-27
 
 ## Automated
 
@@ -13,13 +13,20 @@ tools\build-native.bat
 The integration test starts two engines in-process, performs an encrypted TLS
 transfer of a 12 MiB file, small files, an empty file, image folders, and 40
 small files, then verifies byte counts and SHA-256 hashes. It also covers path
-traversal, reserved Windows names, and other manifest validation cases.
+traversal, reserved Windows names, and other manifest validation cases. The same
+test arms the receiver with a one-time link token, sends the token from the
+sender, asserts the receiver bound it, asserts that sender and receiver both
+observed intermediate `bytes_done` progress before completion, and binds the
+sender's source address to `127.0.0.1`. It then sends with a different token and
+asserts the receiver rejects it, followed by a second transfer with the original
+token from the same peer, which must still succeed.
 
-Latest run:
+Latest run (2026-10-25):
 
 ```text
-test directory: C:\Users\...\Temp\wisp-test-...
-transferred 17.0784 MiB in 987 ms (17.3033 MiB/s)
+test directory: C:\Users\...\Temp\wisp-test-76ce93d7e262
+transferred 17.0784 MiB in 1483 ms (11.5161 MiB/s)
+sender error: {... "message":"temporary link token rejected","code":1}
 all native tests passed
 ```
 
@@ -33,8 +40,35 @@ transfers are lower because of filesystem and antivirus overhead.
 dotnet run --project dotnet\tools\Wisp.Smoke\Wisp.Smoke.csproj -c Release
 ```
 
-Exercises the C ABI from managed code: creates two engines, sends an 8 MiB file,
-waits for managed progress/completion events, and verifies the hash.
+Exercises the C ABI from managed code: round-trips a QR payload with spaces,
+ampersands and an emoji, creates two engines, sets the same one-time link token
+through `SetExpectedLinkToken`/`SetLinkToken`, binds the sender source address,
+sends an 8 MiB file, counts intermediate `ProgressChanged` events on both sides,
+waits for completion, and verifies the hash.
+
+Latest run (2026-10-25):
+
+```text
+QR payload round-trip: 192.168.43.1:54321, Phone 😊
+progress events: sender=1, receiver=1
+verified 8,389,385 bytes in 0.48s (16.6 MiB/s)
+```
+
+### Android build
+
+```powershell
+dotnet build dotnet\src\Wisp.Android\Wisp.Android.csproj -c Debug -f net10.0-android `
+  -p:AndroidPackageFormat=apk -p:EmbedAssembliesIntoApk=true
+```
+
+Latest result: **Build succeeded** (2026-10-25). The signed debug APK is
+`dotnet\src\Wisp.Android\bin\Debug\net10.0-android\com.wisp.app-Signed.apk`
+(~101 MB, arm64-v8a + x86_64). `aapt2 dump badging` confirms `CAMERA`,
+`ACCESS_FINE_LOCATION`, `CHANGE_NETWORK_STATE`, `NEARBY_WIFI_DEVICES`, and
+optional camera features in the merged manifest. The build reports NU1608
+AndroidX version-range warnings from combining MAUI's AndroidX set with the
+CameraX versions required by ZXing.Net.Maui; NuGet resolves the newer MAUI
+versions and the APK builds, but an on-device camera pass is still required.
 
 ## Manual validation performed
 
@@ -116,8 +150,59 @@ on-device pass:
   foreground notification.
 - Adding the home-screen widget and its quick-send action.
 
+### Temporary QR link build (2026-10-25)
+
+The Android app was compiled with ZXing.Net.Maui 0.10.4, QRCoder 1.8.1, and the
+LocalOnlyHotspot/WifiNetworkSpecifier flow. No device was attached during this
+build (`adb devices` was empty), and only one physical phone has been used for
+the project to date, so the two-phone QR flow was **not** exercised on hardware.
+
+What was verified automatically:
+
+- native `wisp_core` built for Windows x64, arm64-v8a, and x86_64
+- native integration test: one-time token handshake, token consumption, and
+  intermediate sender/receiver progress
+- C# interop smoke test: `SetExpectedLinkToken`/`SetLinkToken`, intermediate
+  `ProgressChanged` events, and hash verification
+- Android APK build succeeded; merged manifest contains CAMERA,
+  ACCESS_FINE_LOCATION, CHANGE_NETWORK_STATE, NEARBY_WIFI_DEVICES, and optional
+  camera features
+
+### 0.2.0 release build (2026-10-27)
+
+- Native engine rebuilt for Windows x64, arm64-v8a, and x86_64; the native
+  integration test passed with intermediate progress and the link-token
+  handshake.
+- C# interop smoke test passed, including QR payload round-trip, staged progress
+  events, and the 8 MiB hash check.
+- Android APK rebuilt as `Wisp-android-0.2.0.apk` with the QR-first empty state,
+  share-sheet QR entry, persistent link card/disconnect, back-button sheet
+  handling, and the SSM Limited About screen.
+- Windows Release build and `Wisp-Setup-0.2.0.exe` rebuilt with the updated
+  About card and version metadata.
+- No Android device was attached during this build, so the new UI states (QR
+  entry points, auto-send after scan, X keeps the link, Disconnect) were not
+  exercised on hardware. They are included in the two-phone checklist below.
+
+What still requires two physical phones:
+
+- LocalOnlyHotspot SSID/passphrase retrieval and the `SoftApConfiguration`
+  path on Android 11+
+- hotspot IPv4 detection on the actual OEM interface name
+- the system `WifiNetworkSpecifier` consent dialog and process binding
+- scanner camera preview, QR decode, and the one-time token rejection path
+- Disconnect restoring the previous Wi-Fi on both phones
+- the live transfer sheet, Transfers item, header gauge, and notification
+  advancing with intermediate bytes for a 200 MB+ file over the hotspot
+- closing the link sheet and confirming the link stays active until Disconnect
+- sharing files into Wisp with no LAN peer, scanning the host code, and
+  confirming the staged files send automatically
+
+Use the checklist in [qr-temporary-link.md](qr-temporary-link.md#testing-checklist-two-physical-phones-required).
+
 ## Not yet verified
 
+- Two-phone temporary QR link flow and its Wi-Fi restoration (see above).
 - Final on-device run of the newest share-sheet/biometric APK (USB disconnected).
 - Adding the widget to a real home screen and tapping its Send shortcut.
 - A complete Android → Windows transfer initiated from the Android UI.

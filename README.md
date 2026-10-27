@@ -2,6 +2,9 @@
 
 **Wisp** is a local-first, AirDrop-style file transfer app for **Windows 11 and Android**. Files move directly between devices over the local network. There is no account, no cloud relay, and no analytics.
 
+Wisp is a project by **SSM Limited**. It is free and open-source software,
+released under the [MIT License](LICENSE).
+
 > Working name. The product and protocol are called Wisp throughout the repo.
 
 ## Status
@@ -13,7 +16,11 @@ The repository contains a working end-to-end MVP:
 - AirDrop-style Android send sheet: sharing from Gallery/Files opens Wisp with a scanning nearby-device sheet; choosing a device sends immediately, and a live transfer sheet stays until 100% and can minimize to a progress pill + notification
 - Biometric protections on Android: optional confirmation before accepting files and optional app unlock, using Android BiometricPrompt with device-credential fallback
 - Categorized Android Settings (General / Transfer / Security / About) with appearance, sound, notification, receiving, permissions, identity, and trust controls
-- A self-contained sideload APK (`dist/Wisp-android-0.1.0.apk`) with assemblies embedded for both arm64-v8a and x86_64
+- Android-to-Android temporary QR links that bypass shared Wi-Fi: the host opens a LocalOnlyHotspot and shows a QR code; the other phone scans it, joins with `WifiNetworkSpecifier`, binds the process to that network, and adds the host as a pinned peer in the existing transfer engine. The link is torn down and the previous Wi-Fi restored on Disconnect.
+- A QR-first empty state and share sheet: when no nearby device appears, Wisp offers **Scan QR code** and **Create link**. Sharing files into Wisp and then scanning a code sends the staged files automatically once the private link connects.
+- An always-visible **Disconnect** action for an active temporary link, plus a LINK badge and summary on the Nearby page. Closing the link sheet leaves an established link running; disconnecting is explicit.
+- About screens identify Wisp as a project by SSM Limited and link to the MIT-licensed source.
+- A self-contained sideload APK (`dist/Wisp-android-0.2.0.apk`) with assemblies embedded for both arm64-v8a and x86_64
 - Shared C++17 transfer engine compiled for Windows x64 and Android arm64-v8a / x86_64
 - TLS 1.3 transfer with mutual authentication, certificate pinning, and pairing codes
 - Parallel chunked transfers with per-chunk SHA-256 verification
@@ -128,7 +135,7 @@ Or install with fast deployment on a connected device:
 dotnet build dotnet\src\Wisp.Android\Wisp.Android.csproj -c Debug -f net10.0-android -t:Install
 ```
 
-The APK includes the native engine for arm64-v8a and x86_64 when both `.so` files exist. Assemblies are embedded (`EmbedAssembliesIntoApk=true`), so an APK copied to any phone opens normally — this was the cause of the earlier crash-on-open when sharing debug builds. The packaged development APK is attached to the GitHub release (debug-signed, universal ABI, ~92 MB).
+The APK includes the native engine for arm64-v8a and x86_64 when both `.so` files exist. Assemblies are embedded (`EmbedAssembliesIntoApk=true`), so an APK copied to any phone opens normally — this was the cause of the earlier crash-on-open when sharing debug builds. The current debug build, including the QR scanner/generator and CameraX dependencies, is about 101 MB (universal ABI).
 
 ## Using Wisp
 
@@ -143,13 +150,41 @@ Default destinations:
 - Windows: `%USERPROFILE%\Downloads\Wisp`
 - Android: app-specific external storage, copied to `Downloads/Wisp` after receipt on Android 10+
 
+### Temporary link without shared Wi-Fi (Android → Android)
+
+Use this when the two phones are on different networks, a guest Wi-Fi isolates
+clients, or no router is available:
+
+1. On the phone that will receive files, tap **Temporary link → Create connection**
+   (or **Create link** in the empty nearby state). Wisp starts a private
+   LocalOnlyHotspot and shows a QR code, the Wi-Fi name/password, the host
+   endpoint, and the pinned certificate fingerprint.
+2. On the other phone, tap **Temporary link → Scan code** (or **Scan QR code**),
+   then point the camera at the QR. Approve Android's Wi-Fi prompt. Wisp joins
+   the private network, routes its engine through it, and adds the host as a
+   pinned peer. If you started from a share sheet, the staged files are sent as
+   soon as the link connects.
+3. Choose **Send files** in the connected sheet. The normal share sheet,
+   six-digit pairing code, and live progress flow are unchanged.
+4. Tap **Disconnect** on both phones when finished. The hotspot/network request
+   is released and each phone returns to its previous Wi-Fi and normal discovery.
+   Closing the sheet with the X leaves an active link running (the LINK badge and
+   **Disconnect** button stay on the Nearby page), so you can send more files
+   before tearing it down.
+
+The QR contains a random one-time token that the guest presents in its native
+`HELLO`; the host binds it to the first peer identity and rejects other peers. See
+[docs/qr-temporary-link.md](docs/qr-temporary-link.md) for the full flow,
+security properties, and test checklist.
+
 ## Current limitations
 
 These are deliberately transparent rather than hidden:
 
-- **Discovery is LAN-only.** Wisp uses UDP port `47778` on the local subnet. It does not traverse VLANs, guest networks, or AP client isolation without the manual address fallback. An mDNS/DNS-SD implementation and QR/hotspot fallback are planned but not in this MVP.
+- **Discovery is LAN-only unless you use a temporary link.** Wisp uses UDP port `47778` on the local subnet. It does not traverse VLANs, guest networks, or AP client isolation with discovery alone. The Android-to-Android temporary QR link bypasses that by owning a LocalOnlyHotspot; mDNS/DNS-SD discovery and a Windows-hosted hotspot remain future work.
 - **No resume across app restarts.** A transfer interrupted by a network drop or process kill must currently be retried from the beginning. `.part` files and per-chunk hashing provide the foundation for resume.
-- **No BLE radar, Wi-Fi Direct, or hotspot hosting.** These require significantly more platform-specific work, especially on Windows.
+- **No BLE radar, Wi-Fi Direct, or Windows-hosted hotspot.** Android-to-Android QR temporary links are implemented; Windows hosting and Wi-Fi Direct require significantly more platform-specific work.
+- **Temporary links need two Android devices.** Hosting needs Android 8.0+; scanning and joining need Android 10+. The current build was compiled but could not be exercised with a second physical phone in this environment; see [docs/testing.md](docs/testing.md).
 - **Android identity keys are stored in app-private storage**, not yet wrapped by Android Keystore. Windows keys likewise are not yet DPAPI-wrapped before being passed to the native engine.
 - **The Android OpenSSL build is 3.1.8** from a prebuilt tree. For a production release, rebuild or replace it with OpenSSL 3.5 LTS (or another maintained TLS implementation) and verify 16 KiB page alignment.
 - **No MSIX/Store packaging or signed release APK.** The Windows app is unpackaged but does have a tray icon; Android uses a debug signing key.
@@ -162,7 +197,7 @@ These are deliberately transparent rather than hidden:
 
 ## Security
 
-Wisp uses TLS 1.3 with mutual certificates, a pinned peer fingerprint, and a six-digit short authentication string derived from the TLS exporter. Incoming paths are validated against traversal and Windows reserved names; manifests are bounded; files are staged and only finalized after all chunks verify. See [docs/threat-model.md](docs/threat-model.md) for the full model and residual risks.
+Wisp uses TLS 1.3 with mutual certificates, a pinned peer fingerprint, and a six-digit short authentication string derived from the TLS exporter. Incoming paths are validated against traversal and Windows reserved names; manifests are bounded; files are staged and only finalized after all chunks verify. Android temporary-link QR codes carry the pinned fingerprint plus a random one-time token bound to the first guest identity; treat the QR as a temporary password. See [docs/threat-model.md](docs/threat-model.md) for the full model and residual risks.
 
 Please do not treat this MVP as independently audited cryptography or a finished consumer security product.
 
@@ -171,10 +206,15 @@ Please do not treat this MVP as independently audited cryptography or a finished
 Binaries are published as GitHub release assets because they are too large for
 the repository (the installer exceeds GitHub's normal file limit).
 
-- [Wisp v0.1.0 release](https://github.com/sudaissalisu/wisp/releases/tag/v0.1.0)
-- [Android APK](https://github.com/sudaissalisu/wisp/releases/download/v0.1.0/Wisp-android-0.1.0.apk) — debug-signed, universal
-- [Windows installer](https://github.com/sudaissalisu/wisp/releases/download/v0.1.0/Wisp-Setup-0.1.0.exe) — bundles the .NET and Windows App Runtime prerequisites
-- [Portable Windows build](https://github.com/sudaissalisu/wisp/releases/download/v0.1.0/Wisp-Windows-x64-0.1.0.zip) — requires both runtimes
+- [Wisp v0.2.0 release](https://github.com/sudaissalisu/wisp/releases/tag/v0.2.0)
+- [Android APK](https://github.com/sudaissalisu/wisp/releases/download/v0.2.0/Wisp-android-0.2.0.apk) — debug-signed, universal
+- [Windows installer](https://github.com/sudaissalisu/wisp/releases/download/v0.2.0/Wisp-Setup-0.2.0.exe) — bundles the .NET and Windows App Runtime prerequisites
+- [Portable Windows build](https://github.com/sudaissalisu/wisp/releases/download/v0.2.0/Wisp-Windows-x64-0.2.0.zip) — requires both runtimes
+
+Version 0.2.0 adds the Android temporary QR link, the QR-first send flow,
+disconnect controls, the SSM Limited About screens, and the transfer-progress
+fix. The [v0.1.0 release](https://github.com/sudaissalisu/wisp/releases/tag/v0.1.0)
+remains available for the original build.
 
 The Windows installer requests administrator rights for the runtime installers.
 The Android APK is self-contained and does not need Fast Deployment.
@@ -183,11 +223,26 @@ The Android APK is self-contained and does not need Fast Deployment.
 
 - [Architecture](docs/architecture.md)
 - [Protocol](docs/protocol.md)
+- [Android temporary QR link](docs/qr-temporary-link.md)
 - [Threat model](docs/threat-model.md)
 - [Building](docs/building.md)
 - [Testing notes](docs/testing.md)
 - [Roadmap](docs/roadmap.md)
 - [Release assets](docs/releases.md)
+- [AdMob placement plan](docs/monetization.md)
 - [Changelog](CHANGELOG.md)
 - [Contributing](CONTRIBUTING.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
+
+## License and ownership
+
+Wisp is a project by **SSM Limited**. The source in this repository is released
+under the [MIT License](LICENSE); you may use, modify, and redistribute it with
+the copyright notice intact. The Wisp name, logo, and app icons remain marks of
+SSM Limited. Third-party components keep their own licenses; see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+Wisp does not display ads today. The [AdMob placement plan](docs/monetization.md)
+records the policy for a future optional build: ads never appear in the send,
+accept, transfer, onboarding, QR, or notification flows, and the app can always
+be built without the ad SDK.

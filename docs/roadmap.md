@@ -14,6 +14,17 @@ promises; they are engineering milestones.
   and result notifications, home-screen widget, theme support, onboarding,
   settings menu, history, and biometric gates
 
+## Shipped in 0.2.0
+
+- Android-to-Android temporary QR link using LocalOnlyHotspot,
+  WifiNetworkSpecifier, pinned peer injection, a one-time HELLO token, and
+  automatic teardown/Wi-Fi restoration (two-phone hardware pass pending)
+- QR-first send flow: scan/create entry points in the empty state and share
+  sheet, automatic send of staged files after scanning, and explicit disconnect
+- Intermediate transfer progress on the live sheet, list, notification, and
+  header gauge from the first byte
+- SSM Limited About screens, MIT license, and an AdMob placement plan
+
 ## Next: personal-file polish
 
 - Per-file history entries with thumbnails
@@ -28,10 +39,11 @@ promises; they are engineering milestones.
 - DirectLink abstraction shared by both clients
 - Android ↔ Android Wi-Fi Aware with Wi-Fi Direct fallback
 - BLE endpoint handoff
-- QR display/scanning and a LocalOnlyHotspot fallback
 - Windows-hosted temporary hotspot with QR; requires MSIX package identity and
   `wiFiControl`
-- Automatic teardown and restoration of the previous network
+- Two-phone hardware validation of the Android temporary link, including OEM
+  hotspot interface names and work-profile policy
+
 
 ## Later
 

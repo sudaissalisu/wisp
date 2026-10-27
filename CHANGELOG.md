@@ -1,5 +1,59 @@
 # Changelog
 
+## 0.2.0 — 2026-10-27
+
+### Added
+
+- Android-to-Android temporary QR link: LocalOnlyHotspot hosting, local QR
+  generation with QRCoder, ZXing.Net.Maui camera scanning, WifiNetworkSpecifier
+  joining, process network binding, pinned-peer injection through
+  `WispEngine.AddPeer`, a one-time HELLO token bound to the first guest
+  fingerprint, and automatic teardown/Wi-Fi restoration.
+- QR entry points where they are needed: **Scan QR code** and **Create link** in
+  the empty nearby state, plus **Scan a QR code** in the share sheet when no LAN
+  peer is visible. Files shared into Wisp are staged and sent automatically
+  after the scanned link connects.
+- An active-link card on Nearby with a LINK badge, connection summary, **Open
+  link** and **Disconnect** actions. The host can send back once the guest
+  appears on the private subnet through discovery.
+- Android back button now dismisses the topmost sheet (link, share, transfer,
+  offer, settings category) instead of leaving the app.
+- About screens identify Wisp as a project by SSM Limited, show the version, and
+  link to the MIT-licensed source and license.
+- MIT `LICENSE` and an AdMob placement plan in `docs/monetization.md`.
+- CAMERA, ACCESS_FINE_LOCATION, and CHANGE_NETWORK_STATE manifest permissions,
+  plus on-demand camera/location runtime requests for the temporary link.
+- `QrLinkPayload` in Wisp.Core for validated QR URI construction and parsing.
+- Native `wisp_engine_set_link_token` / `wisp_engine_set_expected_link_token`
+  and an optional trailing link token in the `HELLO` frame.
+- Native `wisp_engine_set_bind_address` and `WispEngine.SetBindAddress` so the
+  hotspot host's outgoing transfer sockets use the soft-AP source address.
+
+### Fixed
+
+- Android transfer progress no longer stays at 0% until completion. The live
+  transfer sheet subscribes to intermediate progress events, the native engine
+  guarantees the first non-zero byte count even inside the throttle window,
+  emits a final 100% progress event before completion, and logs progress at
+  start/five-second intervals/end for diagnosis.
+- `ShowTransferOverlay` resumes from the current item progress instead of
+  resetting the meter to zero.
+- Closing the temporary-link sheet no longer tears down a working link; ending
+  it is an explicit Disconnect action. The link card and toast make that clear.
+- The portable Windows archive is now a real ZIP with forward-slash entry
+  names. The 0.1.0 asset named `.zip` was a tar archive and could not be opened
+  by Windows Explorer, `unzip`, or .NET.
+- Multicast lock acquisition is idempotent across engine restarts.
+
+### Documentation
+
+- New [Android temporary QR link](docs/qr-temporary-link.md) guide with flow,
+  token handshake, permissions, limits, and a two-phone checklist.
+- New [AdMob placement plan](docs/monetization.md) covering placements,
+  guardrails, build flags, and privacy requirements.
+- Protocol, architecture, testing, roadmap, building, and README updates,
+  including the SSM Limited ownership and MIT license sections.
+
 ## 0.1.0 — 2026-10-24
 
 ### Added

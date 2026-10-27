@@ -64,10 +64,47 @@ Events are raised on native worker threads. The UIs must marshal them to their d
 - Local home-screen widget: nearby count, live progress, and quick-send action
 - UDP discovery backed by a `WifiManager.MulticastLock`
 - Process network binding to the active Wi-Fi network so native sockets do not escape over cellular
+- Temporary QR links: `TemporaryHotspot` owns a LocalOnlyHotspot host, `TemporaryWifiLink` joins it with `WifiNetworkSpecifier` and binds the process, and `HotspotAddressResolver` finds the host IPv4 address from interfaces and `LinkProperties`. `QrCodeRenderer` uses QRCoder locally; ZXing.Net.Maui scans from an in-app camera sheet.
+- QR-first entry points in the empty Nearby state and the share sheet; a scanned link can send staged share files automatically. An active link stays up when its sheet is closed, with Open link and Disconnect actions on Nearby. The Android back button dismisses the topmost sheet before leaving the app.
+- The About screen identifies Wisp as a project by SSM Limited, shows the app version, and links to the MIT source and license.
 - Share-sheet receiver (`ACTION_SEND` / `ACTION_SEND_MULTIPLE`) and file picker staging
 - `WispForegroundService` keeps the process alive while a transfer is active
 - Received files are written under the app-specific external directory and copied to `Downloads/Wisp` through MediaStore on Android 10+
 - Trusted devices and identity are visible in Settings
+
+## Temporary QR link
+
+The LAN discovery path assumes both devices share an access point. The Android
+temporary link removes that assumption without adding a transfer protocol:
+
+```text
+Host phone                                  Guest phone
+  │ LocalOnlyHotspot (WPA2, random SSID)        │
+  │◄────────────── scan QR ────────────────────│
+  │◄────────────── WifiNetworkSpecifier ───────│
+  │                                             │ bindProcessToNetwork
+  │  restart engine without old Wi-Fi binding   │  restart engine on temp network
+  │  set expected one-time token                │  set HELLO link token
+  │◄────────────── HELLO + token ───────────────│
+  │  consume token, TLS pin check               │  AddPeer(host, port, fingerprint)
+  │  existing OFFER / DATA / FINISH flow        │
+  │                                             │
+  │  close reservation / unregister callback    │  unbind, restore previous Wi-Fi
+```
+
+The host restarts its engine after the hotspot starts because the previous
+listener was created while the process was bound to the home Wi-Fi, which may
+disappear. It also sets a native outgoing source-address binding to the hotspot
+IPv4 address, because LocalOnlyHotspot is not a ConnectivityManager network and
+the process cannot be bound to it. The guest restarts after `onAvailable` with discovery enabled on the temporary
+network and adds the QR host manually, so the first connection does not depend
+on broadcast. In both cases the engine reuses the same native listener,
+identity, TLS contexts, and chunk pipeline.
+
+The one-time token is an optional trailing `string` in `HELLO`. It is consumed
+on the first match and cleared, which makes a stale QR code useless after the
+host has accepted a guest. Certificate pinning and the pairing code remain the
+authentication mechanisms.
 
 ## Connection lifecycle
 
@@ -132,7 +169,7 @@ The sender assigns 4 MiB chunks from an atomic queue. Each data channel authenti
 - Per-chunk SHA-256 over the ciphertext-protected payload; corrupt chunks fail the transfer
 - Receiver preallocates the part file, writes out-of-order chunks, and renames only after all chunks are present
 - No compression: media is already compressed and compression would cost more CPU than it saves on a LAN
-- No per-chunk UI callback storm: progress is throttled and only summary values cross the ABI
+- No per-chunk UI callback storm: progress is throttled, but the first non-zero byte count is always published and a final 100% event precedes completion
 - Android's `dataSync` foreground service provides a visible transfer notification and process lifetime
 
 ### Measured local numbers
@@ -141,7 +178,7 @@ On the development machine over loopback:
 
 - 128 MiB single file: ~77 MiB/s including TLS setup and process overhead
 - 17 MiB mixed file set with 40 small files: ~9 MiB/s, dominated by filesystem and Windows Defender churn
-- C# interop smoke test: 8 MiB in ~0.35 s
+- C# interop smoke test: 8 MiB in ~0.2-0.5 s (17-42 MiB/s across runs) including QR round-trip and first-byte progress verification
 
 Real Wi-Fi throughput depends on AP, band, power saving, and storage. No benchmark claim is made beyond these local observations.
 
@@ -149,8 +186,7 @@ Real Wi-Fi throughput depends on AP, band, power saving, and storage. No benchma
 
 - Resume metadata and chunk bitmaps persisted next to `.part` files; query on reconnect
 - mDNS/DNS-SD service discovery with TXT metadata and system service pickers
-- QR pairing that carries endpoint, fingerprint, and a one-time token
-- Windows Mobile Hotspot / Android LocalOnlyHotspot fallback
+- Windows Mobile Hotspot temporary link with its own QR flow
 - BLE proximity advertising as a UI hint, not a payload transport
 - MSIX packaging with share-target registration and a scoped firewall rule
 - Keystore/DPAPI wrapping of identity private keys

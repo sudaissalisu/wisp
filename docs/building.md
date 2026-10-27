@@ -33,7 +33,10 @@ The validated local environment used MSVC 19.29, CMake 4.4.4, Ninja 1.13.2,
   or supply `-DWISP_ANDROID_OPENSSL_ROOT=...`
 
 At least one Android device is required to validate Wi-Fi discovery and transfers.
-A second Android device is required for the future DirectLink work.
+Two Android 10+ devices are required to validate the temporary QR link end to
+end (the host can be Android 8+, the scanner needs Android 10+). The Android
+build restores ZXing.Net.Maui.Controls, ZXing.Net, QRCoder, and the CameraX
+AndroidX packages from NuGet; no extra manual setup is required.
 
 ## Native engine
 
@@ -81,7 +84,7 @@ installer bundles both.
 & "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer\wisp.iss
 ```
 
-Output: `dist/Wisp-Setup-0.1.0.exe`.
+Output: `dist/Wisp-Setup-0.2.0.exe`.
 
 The setup installs to `Program Files\Wisp`, creates Start Menu/optional desktop
 shortcuts, and registers an optional startup entry. It requests administrator
@@ -90,6 +93,24 @@ rights because the runtime installers require them.
 > The Windows App SDK self-contained publish path currently crashes inside
 > `Microsoft.UI.Xaml.dll` on this toolchain. The installer therefore uses the
 > verified framework-dependent Release build plus bundled runtime installers.
+
+### Portable zip
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\pack-windows.ps1 -Version 0.2.0
+```
+
+Output: `dist/Wisp-Windows-x64-0.2.0.zip`. The script writes a real ZIP with
+forward-slash entry names. Do not use GNU tar's `-a` on Windows (it produces a
+tar archive even with a `.zip` name, which the 0.1.0 asset accidentally did) or
+`Compress-Archive` (backslash entry names).
+
+### Checksums
+
+```powershell
+cd dist
+sha256sum Wisp-android-0.2.0.apk Wisp-Setup-0.2.0.exe Wisp-Windows-x64-0.2.0.zip > SHA256SUMS.txt
+```
 
 ## Android app
 

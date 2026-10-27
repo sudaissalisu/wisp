@@ -36,8 +36,8 @@ Payload length is capped at 8 MiB. Unknown frame types and malformed lengths ter
 
 | Value | Name | Payload |
 |---:|---|---|
-| 1 | `HELLO` | `u16 protocol_version`, `string name`, `string platform` |
-| 2 | `HELLO_ACK` | Same as `HELLO` |
+| 1 | `HELLO` | `u16 protocol_version`, `string name`, `string platform`, optional `string link_token` |
+| 2 | `HELLO_ACK` | `u16 protocol_version`, `string name`, `string platform` |
 | 3 | `OFFER` | Manifest |
 | 4 | `OFFER_RESPONSE` | `u8 accepted`, `string message`, optional 32-byte data token |
 | 5 | `ATTACH` | Exactly 32-byte data-channel token |
@@ -51,6 +51,26 @@ Payload length is capped at 8 MiB. Unknown frame types and malformed lengths ter
 | 13 | `PONG` | Empty (reserved) |
 
 Protocol version is currently `1`. Strings are `u32 byte_length` followed by UTF-8 bytes. The decoder bounds every length.
+
+### Temporary-link token
+
+An Android host that shows a temporary QR link arms a 32-hex-character one-time
+token and expects it in the first `HELLO`. A scanning guest appends it after the
+platform string:
+
+```text
+u16 version, string name, string platform, string link_token
+```
+
+- The receiver compares the token in constant time and binds it to the first
+  peer certificate fingerprint. Later connections must present the same token
+  from that same peer. A missing or different token, or a replay from another
+  peer identity, receives an `ERROR` frame and the connection closes.
+- `HELLO_ACK` never carries a token.
+- The trailing field is optional in the decoder. Older peers reject it, but only
+  a guest using a QR created by the new host ever sends it; that host is new.
+- The token complements certificate pinning and the six-digit pairing code; it
+  does not replace either. See [qr-temporary-link.md](qr-temporary-link.md).
 
 ### Manifest
 

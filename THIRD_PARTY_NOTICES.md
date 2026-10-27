@@ -1,6 +1,7 @@
 # Third-party notices
 
-Wisp is built on the following open-source components. Versions reflect the current
+Wisp is a project by SSM Limited and is released under the MIT License. It is
+built on the following open-source components. Versions reflect the current
 development build; see the package manifests for the exact resolved versions.
 
 ## Runtime libraries
@@ -11,7 +12,10 @@ development build; see the package manifests for the exact resolved versions.
 | .NET 10 / .NET MAUI | Shared app logic and Android UI | MIT |
 | Windows App SDK / WinUI 3 | Windows UI | MIT |
 | H.NotifyIcon.WinUI 2.4.1 | Windows taskbar tray icon | MIT |
-| Microsoft.Data.Sqlite? | not used in this build | — |
+| ZXing.Net.Maui.Controls 0.10.4 / ZXing.Net.Maui 0.10.4 | Android camera QR scanning | MIT |
+| ZXing.Net 0.16.11 | Barcode decode and encode core | Apache License 2.0 |
+| QRCoder 1.8.1 | Offline QR generation in the Android temporary-link sheet | MIT |
+| AndroidX CameraX (Camera2/Lifecycle/View) | Camera preview and frame analysis for ZXing.Net.Maui | Apache License 2.0 |
 
 ## Fonts and assets
 
@@ -19,7 +23,7 @@ development build; see the package manifests for the exact resolved versions.
 |---|---|---|
 | Material Icons font (Google) | Android navigation and status icons | Apache License 2.0 |
 | Open Sans (Google) | Android UI type | SIL Open Font License 1.1 |
-| Wisp app icon, splash mark, UI sounds | Original assets generated for this project | © Wisp project |
+| Wisp app icon, splash mark, UI sounds | Original assets generated for this project | © 2026 SSM Limited |
 
 The Android OpenSSL binaries in `android_openssl/ssl_3` are the prebuilt KDAB
 Android OpenSSL tree (OpenSSL 3.1.8). They are used for development only and must
@@ -33,4 +37,4 @@ They are build-time dependencies and are not distributed in the repository.
 
 If you redistribute a Wisp build, include this file and the upstream license
 texts for the components you ship (notably OpenSSL, Material Icons, Open Sans,
-and H.NotifyIcon).
+H.NotifyIcon, ZXing.Net, QRCoder, and the AndroidX CameraX libraries).
