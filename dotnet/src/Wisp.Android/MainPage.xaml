@@ -311,7 +311,10 @@
                         <BindableLayout.ItemTemplate>
                             <DataTemplate>
                                 <Border Style="{StaticResource InnerCard}">
-                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                                    <Border.GestureRecognizers>
+                                        <TapGestureRecognizer CommandParameter="{Binding Id}" Tapped="History_Tapped" />
+                                    </Border.GestureRecognizers>
+                                    <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
                                         <Label Text="{Binding Glyph}" FontFamily="MaterialIcons-Regular" FontSize="19"
                                                VerticalOptions="Center"
                                                TextColor="{Binding StateBrush}" />
@@ -329,6 +332,9 @@
                                             <Label Text="{Binding WhenText}" Style="{StaticResource TinyLabel}"
                                                    HorizontalTextAlignment="End" />
                                         </VerticalStackLayout>
+                                        <Label Grid.Column="3" Text="&#xE5CC;" FontFamily="MaterialIcons-Regular"
+                                               FontSize="18" TextColor="{StaticResource Mint}"
+                                               VerticalOptions="Center" IsVisible="{Binding CanOpen}" />
                                     </Grid>
                                 </Border>
                             </DataTemplate>
@@ -338,6 +344,130 @@
                         <Label Text="Finished transfers will be remembered here."
                                Style="{StaticResource MutedLabel}" HorizontalTextAlignment="Center" />
                     </Border>
+                </VerticalStackLayout>
+            </ScrollView>
+
+            <!-- FILES -->
+            <ScrollView x:Name="FilesScroll" IsVisible="False" VerticalScrollBarVisibility="Never">
+                <VerticalStackLayout Padding="18,4,18,26" Spacing="16">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <VerticalStackLayout Spacing="4">
+                            <Label Text="Files" Style="{StaticResource DisplayLabel}" />
+                            <Label Text="Everything you received, ready to play or open."
+                                   Style="{StaticResource MutedLabel}" />
+                        </VerticalStackLayout>
+                        <Button Grid.Column="1" Text="Refresh" Style="{StaticResource GhostButton}"
+                                Clicked="RefreshLibrary_Click" VerticalOptions="End" />
+                    </Grid>
+
+                    <Border Style="{StaticResource SurfaceCard}" Padding="14">
+                        <VerticalStackLayout Spacing="11">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <Label x:Name="LibrarySummaryLabel" Text="No files yet"
+                                       Style="{StaticResource SectionLabel}" VerticalOptions="Center" />
+                                <Label x:Name="LibraryFolderLabel" Grid.Column="1" Text="Wisp folder"
+                                       Style="{StaticResource TinyLabel}" VerticalOptions="Center" />
+                            </Grid>
+                            <ScrollView Orientation="Horizontal" HorizontalScrollBarVisibility="Never">
+                                <HorizontalStackLayout Spacing="7">
+                                    <Border x:Name="LibraryAllChip" Padding="13,7" StrokeThickness="1"
+                                            StrokeShape="RoundRectangle 14"
+                                            Stroke="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer CommandParameter="all" Tapped="LibraryFilter_Tapped" />
+                                        </Border.GestureRecognizers>
+                                        <Label x:Name="LibraryAllText" Text="All" FontFamily="OpenSansSemibold"
+                                               FontSize="12" TextColor="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                                    </Border>
+                                    <Border x:Name="LibraryPhotoChip" Padding="13,7" StrokeThickness="1"
+                                            StrokeShape="RoundRectangle 14"
+                                            Stroke="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer CommandParameter="image" Tapped="LibraryFilter_Tapped" />
+                                        </Border.GestureRecognizers>
+                                        <Label x:Name="LibraryPhotoText" Text="Photos" FontFamily="OpenSansSemibold"
+                                               FontSize="12" TextColor="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                                    </Border>
+                                    <Border x:Name="LibraryVideoChip" Padding="13,7" StrokeThickness="1"
+                                            StrokeShape="RoundRectangle 14"
+                                            Stroke="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer CommandParameter="video" Tapped="LibraryFilter_Tapped" />
+                                        </Border.GestureRecognizers>
+                                        <Label x:Name="LibraryVideoText" Text="Videos" FontFamily="OpenSansSemibold"
+                                               FontSize="12" TextColor="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                                    </Border>
+                                    <Border x:Name="LibraryAudioChip" Padding="13,7" StrokeThickness="1"
+                                            StrokeShape="RoundRectangle 14"
+                                            Stroke="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer CommandParameter="audio" Tapped="LibraryFilter_Tapped" />
+                                        </Border.GestureRecognizers>
+                                        <Label x:Name="LibraryAudioText" Text="Music" FontFamily="OpenSansSemibold"
+                                               FontSize="12" TextColor="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                                    </Border>
+                                    <Border x:Name="LibraryDocChip" Padding="13,7" StrokeThickness="1"
+                                            StrokeShape="RoundRectangle 14"
+                                            Stroke="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}">
+                                        <Border.GestureRecognizers>
+                                            <TapGestureRecognizer CommandParameter="document" Tapped="LibraryFilter_Tapped" />
+                                        </Border.GestureRecognizers>
+                                        <Label x:Name="LibraryDocText" Text="Docs" FontFamily="OpenSansSemibold"
+                                               FontSize="12" TextColor="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
+                                    </Border>
+                                </HorizontalStackLayout>
+                            </ScrollView>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <VerticalStackLayout x:Name="LibraryHost" Spacing="8"
+                                         BindableLayout.ItemsSource="{Binding Library}">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource InnerCard}">
+                                    <Border.GestureRecognizers>
+                                        <TapGestureRecognizer CommandParameter="{Binding Path}" Tapped="LibraryFile_Tapped" />
+                                    </Border.GestureRecognizers>
+                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                                        <Border WidthRequest="46" HeightRequest="46" BackgroundColor="{StaticResource MintSoft}"
+                                                StrokeThickness="0">
+                                            <Border.StrokeShape><RoundRectangle CornerRadius="15" /></Border.StrokeShape>
+                                            <Label Text="{Binding Glyph}" FontFamily="MaterialIcons-Regular"
+                                                   FontSize="21" TextColor="{StaticResource Mint}"
+                                                   HorizontalOptions="Center" VerticalOptions="Center" />
+                                        </Border>
+                                        <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                            <Label Text="{Binding FileName}" FontFamily="OpenSansSemibold"
+                                                   FontSize="13.5" LineBreakMode="MiddleTruncation"
+                                                   TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                                            <Label Text="{Binding MetaText}" Style="{StaticResource TinyLabel}"
+                                                   LineBreakMode="TailTruncation" />
+                                        </VerticalStackLayout>
+                                        <Label Grid.Column="2" Text="&#xE5CC;" FontFamily="MaterialIcons-Regular"
+                                               FontSize="19" TextColor="{StaticResource Mint}"
+                                               VerticalOptions="Center" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+
+                    <Border x:Name="LibraryEmpty" Style="{StaticResource SurfaceCard}" Padding="22"
+                            IsVisible="False">
+                        <VerticalStackLayout Spacing="10" HorizontalOptions="Center" Padding="0,10">
+                            <Label FontFamily="MaterialIcons-Regular" Text="&#xE2C7;" FontSize="38"
+                                   TextColor="{StaticResource Mint}" HorizontalTextAlignment="Center" />
+                            <Label x:Name="LibraryEmptyTitleLabel" Text="No files here yet"
+                                   Style="{StaticResource SectionLabel}"
+                                   HorizontalTextAlignment="Center" />
+                            <Label x:Name="LibraryEmptyBodyLabel"
+                                   Text="Received photos, videos, music, and documents appear in this tab."
+                                   Style="{StaticResource MutedLabel}" HorizontalTextAlignment="Center" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Label Text="A copy of every received file is also placed in Downloads/Wisp when you accept a transfer."
+                           Style="{StaticResource TinyLabel}" TextColor="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
                 </VerticalStackLayout>
             </ScrollView>
 
@@ -677,13 +807,13 @@
             <Border.Shadow>
                 <Shadow Brush="#000000" Opacity="0.35" Radius="24" Offset="0,8" />
             </Border.Shadow>
-            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="4" Padding="3">
+            <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="3" Padding="3">
                 <Border x:Name="NavNearbyPill" BackgroundColor="{StaticResource Mint}" StrokeThickness="0"
                         StrokeShape="RoundRectangle 20" Padding="4">
                     <VerticalStackLayout Spacing="1" HorizontalOptions="Center">
                         <Label FontFamily="MaterialIcons-Regular" Text="&#xE1B1;" FontSize="19" TextColor="{StaticResource OnAccent}"
                                HorizontalTextAlignment="Center" x:Name="NavNearbyIcon" />
-                        <Label Text="Nearby" FontFamily="OpenSansSemibold" FontSize="10.5" x:Name="NavNearbyText"
+                        <Label Text="Nearby" FontFamily="OpenSansSemibold" FontSize="10" x:Name="NavNearbyText"
                                TextColor="{StaticResource OnAccent}" HorizontalTextAlignment="Center" />
                     </VerticalStackLayout>
                     <Border.GestureRecognizers>
@@ -696,7 +826,7 @@
                         <Label FontFamily="MaterialIcons-Regular" Text="&#xE889;" FontSize="19" x:Name="NavTransfersIcon"
                                HorizontalTextAlignment="Center"
                                TextColor="{AppThemeBinding Light={StaticResource FaintLight}, Dark={StaticResource FaintDark}}" />
-                        <Label Text="Transfers" FontFamily="OpenSansSemibold" FontSize="10.5" x:Name="NavTransfersText"
+                        <Label Text="Transfers" FontFamily="OpenSansSemibold" FontSize="10" x:Name="NavTransfersText"
                                HorizontalTextAlignment="Center"
                                TextColor="{AppThemeBinding Light={StaticResource FaintLight}, Dark={StaticResource FaintDark}}" />
                     </VerticalStackLayout>
@@ -704,13 +834,27 @@
                         <TapGestureRecognizer Tapped="NavTransfers_Tapped" NumberOfTapsRequired="1" />
                     </Border.GestureRecognizers>
                 </Border>
-                <Border x:Name="NavSettingsPill" Grid.Column="2" BackgroundColor="Transparent" StrokeThickness="0"
+                <Border x:Name="NavFilesPill" Grid.Column="2" BackgroundColor="Transparent" StrokeThickness="0"
+                        StrokeShape="RoundRectangle 20" Padding="4">
+                    <VerticalStackLayout Spacing="1" HorizontalOptions="Center">
+                        <Label FontFamily="MaterialIcons-Regular" Text="&#xE2C7;" FontSize="19" x:Name="NavFilesIcon"
+                               HorizontalTextAlignment="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource FaintLight}, Dark={StaticResource FaintDark}}" />
+                        <Label Text="Files" FontFamily="OpenSansSemibold" FontSize="10" x:Name="NavFilesText"
+                               HorizontalTextAlignment="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource FaintLight}, Dark={StaticResource FaintDark}}" />
+                    </VerticalStackLayout>
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="NavFiles_Tapped" NumberOfTapsRequired="1" />
+                    </Border.GestureRecognizers>
+                </Border>
+                <Border x:Name="NavSettingsPill" Grid.Column="3" BackgroundColor="Transparent" StrokeThickness="0"
                         StrokeShape="RoundRectangle 20" Padding="4">
                     <VerticalStackLayout Spacing="1" HorizontalOptions="Center">
                         <Label FontFamily="MaterialIcons-Regular" Text="&#xE8B8;" FontSize="19" x:Name="NavSettingsIcon"
                                HorizontalTextAlignment="Center"
                                TextColor="{AppThemeBinding Light={StaticResource FaintLight}, Dark={StaticResource FaintDark}}" />
-                        <Label Text="Settings" FontFamily="OpenSansSemibold" FontSize="10.5" x:Name="NavSettingsText"
+                        <Label Text="Settings" FontFamily="OpenSansSemibold" FontSize="10" x:Name="NavSettingsText"
                                HorizontalTextAlignment="Center"
                                TextColor="{AppThemeBinding Light={StaticResource FaintLight}, Dark={StaticResource FaintDark}}" />
                     </VerticalStackLayout>
@@ -901,23 +1045,56 @@
             </Border>
         </Grid>
 
-        <!-- Minimized live progress -->
-        <Border x:Name="MiniProgressPill" Grid.Row="2" IsVisible="False" ZIndex="18"
-                Margin="24,0,24,86" Padding="12,9" HorizontalOptions="Center"
+        <!-- Minimized live progress: a dock above the nav bar. Tap the card to
+             reopen the transfer sheet; the Cancel action stays separate. -->
+        <Border x:Name="MiniProgressPill" Grid.Row="1" IsVisible="False" ZIndex="18"
+                VerticalOptions="End" Margin="14,0,14,14" Padding="14,12"
                 BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceAltDark}}"
                 Stroke="{StaticResource MintBrush}" StrokeThickness="1"
-                StrokeShape="RoundRectangle 18">
-            <Border.GestureRecognizers>
-                <TapGestureRecognizer Tapped="RestoreTransferOverlay_Tapped" />
-            </Border.GestureRecognizers>
-            <Grid ColumnDefinitions="Auto,130,Auto" ColumnSpacing="10">
-                <Label x:Name="MiniProgressGlyph" FontFamily="MaterialIcons-Regular" Text="&#xE5D8;"
-                       FontSize="16" TextColor="{StaticResource Mint}" VerticalOptions="Center" />
-                <ProgressBar x:Name="MiniProgressBar" Grid.Column="1" Progress="0"
-                             ProgressColor="{StaticResource Mint}" HeightRequest="4" VerticalOptions="Center" />
-                <Label x:Name="MiniProgressLabel" Grid.Column="2" Text="0%" FontFamily="OpenSansSemibold"
-                       FontSize="11" TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}"
-                       VerticalOptions="Center" />
+                StrokeShape="RoundRectangle 20">
+            <Border.Shadow>
+                <Shadow Brush="#000000" Opacity="0.38" Radius="20" Offset="0,7" />
+            </Border.Shadow>
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                <Border WidthRequest="40" HeightRequest="40" BackgroundColor="{StaticResource MintSoft}"
+                        StrokeThickness="0" VerticalOptions="Center">
+                    <Border.StrokeShape><RoundRectangle CornerRadius="13" /></Border.StrokeShape>
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="RestoreTransferOverlay_Tapped" />
+                    </Border.GestureRecognizers>
+                    <Label x:Name="MiniProgressGlyph" FontFamily="MaterialIcons-Regular" Text="&#xE5D8;"
+                           FontSize="19" TextColor="{StaticResource Mint}"
+                           HorizontalOptions="Center" VerticalOptions="Center" />
+                </Border>
+                <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
+                    <VerticalStackLayout.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="RestoreTransferOverlay_Tapped" />
+                    </VerticalStackLayout.GestureRecognizers>
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <Label x:Name="MiniProgressTitleLabel" Text="Sending…"
+                               FontFamily="OpenSansSemibold" FontSize="13"
+                               LineBreakMode="TailTruncation"
+                               TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                        <Label x:Name="MiniProgressLabel" Grid.Column="1" Text="0%"
+                               FontFamily="OpenSansSemibold" FontSize="12"
+                               TextColor="{StaticResource Mint}" />
+                    </Grid>
+                    <ProgressBar x:Name="MiniProgressBar" Progress="0"
+                                 ProgressColor="{StaticResource Mint}" HeightRequest="5"
+                                 BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceAltLight}, Dark={StaticResource SurfaceLight}}" />
+                    <Label x:Name="MiniProgressStatusLabel" Text="" Style="{StaticResource TinyLabel}" />
+                </VerticalStackLayout>
+                <VerticalStackLayout Grid.Column="2" Spacing="2" VerticalOptions="Center">
+                    <Label Text="&#xE5CE;" FontFamily="MaterialIcons-Regular" FontSize="18"
+                           TextColor="{StaticResource Mint}" HorizontalTextAlignment="Center">
+                        <Label.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="RestoreTransferOverlay_Tapped" />
+                        </Label.GestureRecognizers>
+                    </Label>
+                    <Button x:Name="MiniProgressCancelButton" Text="Cancel" Style="{StaticResource GhostButton}" FontSize="10"
+                            HeightRequest="28" Padding="0" Clicked="MiniProgressCancel_Click"
+                            AutomationProperties.Name="Cancel transfer" />
+                </VerticalStackLayout>
             </Grid>
         </Border>
 

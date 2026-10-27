@@ -132,8 +132,37 @@ public static class AndroidFileService
         return exported > 0 ? "Downloads/Wisp" : null;
     }
 
-    private static string DisplayNameFor(global::Android.Net.Uri uri)
+    /// <summary>
+    /// Opens a received file in whichever installed app handles its MIME type.
+    /// Files live in app-private external storage, so the URI must come from the
+    /// FileProvider declared in the manifest.
+    /// </summary>
+    public static bool OpenWithSystem(string path)
     {
+        try
+        {
+            var file = new Java.IO.File(path);
+            if (!file.Exists()) return false;
+            var uri = AndroidX.Core.Content.FileProvider.GetUriForFile(
+                Context, $"{Context.PackageName}.fileprovider", file);
+            var intent = new Intent(Intent.ActionView);
+            intent.SetDataAndType(uri, MimeTypeOf(path));
+            intent.AddFlags(ActivityFlags.GrantReadUriPermission | ActivityFlags.NewTask);
+            Context.StartActivity(intent);
+            return true;
+        }
+        catch (ActivityNotFoundException)
+        {
+            return false;
+        }
+        catch (Exception exception)
+        {
+            System.Diagnostics.Debug.WriteLine($"OpenWithSystem failed: {exception}");
+            return false;
+        }
+    }
+
+    private static string DisplayNameFor(global::Android.Net.Uri uri)    {
         try
         {
             using var cursor = Context.ContentResolver!.Query(uri,

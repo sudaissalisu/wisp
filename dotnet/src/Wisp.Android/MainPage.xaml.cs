@@ -71,6 +71,11 @@ public partial class MainPage : ContentPage
     private bool _navigatingBack;
     private string _settingsCategory = "general";
     private readonly List<string> _pendingSharePaths = [];
+    private List<LibraryFile> _librarySnapshot = [];
+    private string _libraryFilter = "all";
+    private bool _libraryLoading;
+    private CancellationTokenSource? _miniDockHide;
+    private int _miniDockToken;
     private string? _activeTransferId;
     private bool _transferMinimized;
     private bool _unlocked;
@@ -130,12 +135,14 @@ public partial class MainPage : ContentPage
     public ObservableCollection<PeerItem> Peers { get; } = [];
     public ObservableCollection<TransferItem> Transfers { get; } = [];
     public ObservableCollection<HistoryItem> History { get; } = [];
+    public ObservableCollection<LibraryFile> Library { get; } = [];
     public ObservableCollection<TrustedItem> Trusted { get; } = [];
 
     protected override void OnDisappearing()
     {
         base.OnDisappearing();
         _appVisible = false;
+        MediaViewer.DismissCurrent();
         // Release the camera while the app is not visible; the temporary link
         // itself (hotspot or joined network) stays up for in-flight transfers.
         if (LinkOverlay.IsVisible && LinkScanPanel.IsVisible)
@@ -173,6 +180,7 @@ public partial class MainPage : ContentPage
         }
         _ = ProcessSharedFilesAsync();
         await ProcessAppActionsAsync();
+        if (_activeSection == "files") _ = RefreshLibraryAsync(force: true);
     }
 
     /// <summary>
@@ -247,6 +255,8 @@ public partial class MainPage : ContentPage
     {
         if (_closing) return;
         _closing = true;
+        MediaViewer.DismissCurrent();
+        CancelMiniDockHide();
         ShareInbox.Changed -= OnShareInboxChanged;
         AppActionInbox.Changed -= OnAppActionChanged;
         StopPresencePulse();
@@ -308,7 +318,7 @@ public partial class MainPage : ContentPage
                     SaveDirectory = _settings.SaveDirectory,
                     IdentityDirectory = _identityDirectory,
                     DiscoveryPort = discovery ? 47778 : 0,
-                    DataChannels = 4
+                    DataChannels = 0
                 }));
                 UpdateIdentityUi();
                 SetHeaderStatus("visible", true);
@@ -531,6 +541,7 @@ public partial class MainPage : ContentPage
             {
                 var saved = await AndroidFileService.ExportToDownloadsAsync(completion.SavedPath);
                 if (saved is not null) ShowToast($"A copy is saved in {saved}", IconCheck);
+                _ = RefreshLibraryAsync(force: true);
             }
             UpdateForegroundService();
         });
@@ -838,6 +849,180 @@ public partial class MainPage : ContentPage
         HistorySectionLabel.IsVisible = History.Count > 0;
     }
 
+    // ── Files library ─────────────────────────────────────────────────
+
+    private async Task RefreshLibraryAsync(bool force = false)
+    {
+        if (_libraryLoading && !force) return;
+        _libraryLoading = true;
+        try
+        {
+            _librarySnapshot = await LibraryFile.ScanAsync(_settings.SaveDirectory);
+            ApplyLibraryFilter();
+        }
+        catch (Exception exception)
+        {
+            System.Diagnostics.Debug.WriteLine($"Library scan failed: {exception}");
+            ShowToast("Could not read the received files.", IconError, error: true);
+        }
+        finally
+        {
+            _libraryLoading = false;
+        }
+    }
+
+    private void ApplyLibraryFilter()
+    {
+        Library.Clear();
+        var filtered = _librarySnapshot
+            .Where(LibraryMatches)
+            .ToList();
+        foreach (var file in filtered) Library.Add(file);
+        var total = filtered.Sum(file => file.Size);
+        LibrarySummaryLabel.Text = filtered.Count == 0
+            ? "No files yet"
+            : $"{filtered.Count} file{(filtered.Count == 1 ? "" : "s")} · {TransferOffer.FormatBytes(total)}";
+        LibraryHost.IsVisible = filtered.Count > 0;
+        LibraryEmpty.IsVisible = filtered.Count == 0;
+        LibraryEmptyTitleLabel.Text = _librarySnapshot.Count == 0
+            ? "No files here yet"
+            : "Nothing matches this filter";
+        LibraryEmptyBodyLabel.Text = _librarySnapshot.Count == 0
+            ? "Received photos, videos, music, and documents appear in this tab."
+            : "Try another filter, or refresh after the next transfer finishes.";
+        RefreshLibraryChips();
+    }
+
+    private bool LibraryMatches(LibraryFile file) => _libraryFilter switch
+    {
+        "image" => file.Kind == LibraryKind.Image,
+        "video" => file.Kind == LibraryKind.Video,
+        "audio" => file.Kind == LibraryKind.Audio,
+        "document" => file.Kind == LibraryKind.Document,
+        _ => true
+    };
+
+    private void RefreshLibraryChips()
+    {
+        StyleLibraryChip(LibraryAllChip, LibraryAllText, _libraryFilter == "all");
+        StyleLibraryChip(LibraryPhotoChip, LibraryPhotoText, _libraryFilter == "image");
+        StyleLibraryChip(LibraryVideoChip, LibraryVideoText, _libraryFilter == "video");
+        StyleLibraryChip(LibraryAudioChip, LibraryAudioText, _libraryFilter == "audio");
+        StyleLibraryChip(LibraryDocChip, LibraryDocText, _libraryFilter == "document");
+    }
+
+    private static void StyleLibraryChip(Border chip, Label text, bool selected)
+    {
+        var lightTheme = Application.Current?.RequestedTheme == AppTheme.Light;
+        chip.BackgroundColor = selected ? MauiColor.FromArgb("#1F45E3B4") : Colors.Transparent;
+        chip.Stroke = new SolidColorBrush(selected
+            ? MintColor
+            : (lightTheme ? MauiColor.FromArgb("#E2E8E5") : MauiColor.FromArgb("#1FFFFFFF")));
+        text.TextColor = selected ? MintColor
+            : (lightTheme ? MauiColor.FromArgb("#5B6663") : MauiColor.FromArgb("#9AA6A3"));
+    }
+
+    private async void RefreshLibrary_Click(object sender, EventArgs e)
+    {
+        ShowToast("Scanning received files…", IconInfo, durationSeconds: 2);
+        await RefreshLibraryAsync(force: true);
+    }
+
+    private void LibraryFilter_Tapped(object? sender, TappedEventArgs e)
+    {
+        if (e.Parameter is not string filter || _libraryFilter == filter) return;
+        _libraryFilter = filter;
+        ApplyLibraryFilter();
+    }
+
+    private async void LibraryFile_Tapped(object? sender, TappedEventArgs e)
+    {
+        if (e.Parameter is not string path) return;
+        await OpenFileAsync(path);
+    }
+
+    private async void History_Tapped(object? sender, TappedEventArgs e)
+    {
+        if (e.Parameter is not string id) return;
+        var entry = _historyStore.Items.FirstOrDefault(item =>
+            item.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+        if (entry is null) return;
+        if (!entry.IsIncoming || !entry.Succeeded)
+        {
+            ShowToast(entry.IsIncoming
+                ? "That transfer did not finish."
+                : "Sent files stay on the other device.", IconInfo);
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(entry.SavedPath))
+        {
+            ShowToast("The saved folder is not available.", IconInfo);
+            return;
+        }
+        if (File.Exists(entry.SavedPath))
+        {
+            await OpenFileAsync(entry.SavedPath);
+            return;
+        }
+        if (!Directory.Exists(entry.SavedPath))
+        {
+            ShowToast("That folder is no longer available.", IconInfo);
+            return;
+        }
+
+        List<string> files;
+        try
+        {
+            files = Directory.EnumerateFiles(entry.SavedPath, "*", SearchOption.AllDirectories)
+                .Where(path => !path.Contains(".wisp-", StringComparison.OrdinalIgnoreCase))
+                .Where(path => !path.EndsWith(".part", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+        catch (Exception exception)
+        {
+            System.Diagnostics.Debug.WriteLine($"History folder read failed: {exception}");
+            ShowToast("That folder could not be read.", IconError, error: true);
+            return;
+        }
+        if (files.Count == 0)
+        {
+            ShowToast("No files are left in that transfer.", IconInfo);
+            return;
+        }
+        if (files.Count == 1)
+        {
+            await OpenFileAsync(files[0]);
+            return;
+        }
+
+        var labels = files.Take(25)
+            .Select(path => Path.GetRelativePath(entry.SavedPath, path))
+            .ToArray();
+        var choice = await DisplayActionSheetAsync("Open file", "Cancel", null, labels);
+        if (string.IsNullOrEmpty(choice) || choice == "Cancel") return;
+        var index = Array.IndexOf(labels, choice);
+        if (index >= 0) await OpenFileAsync(files[index]);
+    }
+
+    private async Task OpenFileAsync(string path)
+    {
+        if (!File.Exists(path))
+        {
+            ShowToast("That file is no longer available.", IconError, error: true);
+            await RefreshLibraryAsync(force: true);
+            return;
+        }
+        if (MediaViewer.CanPreview(path))
+        {
+            if (!MediaViewer.Open(path))
+                ShowToast("This media file could not be opened.", IconError, error: true);
+            return;
+        }
+        if (!AndroidFileService.OpenWithSystem(path))
+            ShowToast("No installed app can open this file.", IconInfo);
+    }
+
     // ── Offers ────────────────────────────────────────────────────────
 
     private async Task HandleOfferAsync(TransferOffer offer)
@@ -1104,6 +1289,7 @@ public partial class MainPage : ContentPage
 
     private void NavNearby_Tapped(object? sender, TappedEventArgs e) => SetSection("nearby");
     private void NavTransfers_Tapped(object? sender, TappedEventArgs e) => SetSection("transfers");
+    private void NavFiles_Tapped(object? sender, TappedEventArgs e) => SetSection("files");
     private void NavSettings_Tapped(object? sender, TappedEventArgs e) => SetSection("settings");
     private void HeaderActivity_Tapped(object? sender, TappedEventArgs e) => SetSection("transfers");
 
@@ -1112,9 +1298,11 @@ public partial class MainPage : ContentPage
         _activeSection = "nearby";
         NearbyScroll.IsVisible = true;
         TransfersScroll.IsVisible = false;
+        FilesScroll.IsVisible = false;
         SettingsScroll.IsVisible = false;
         StyleNav(NavNearbyPill, NavNearbyIcon, NavNearbyText, true);
         StyleNav(NavTransfersPill, NavTransfersIcon, NavTransfersText, false);
+        StyleNav(NavFilesPill, NavFilesIcon, NavFilesText, false);
         StyleNav(NavSettingsPill, NavSettingsIcon, NavSettingsText, false);
     }
 
@@ -1138,9 +1326,11 @@ public partial class MainPage : ContentPage
         _activeSection = section;
         var incoming = section == "nearby" ? (VisualElement)NearbyScroll
             : section == "transfers" ? (VisualElement)TransfersScroll
+            : section == "files" ? (VisualElement)FilesScroll
             : (VisualElement)SettingsScroll;
         NearbyScroll.IsVisible = section == "nearby";
         TransfersScroll.IsVisible = section == "transfers";
+        FilesScroll.IsVisible = section == "files";
         SettingsScroll.IsVisible = section == "settings";
         incoming.Opacity = 0;
         incoming.TranslationY = 14;
@@ -1148,9 +1338,11 @@ public partial class MainPage : ContentPage
         _ = incoming.TranslateTo(0, 0, 220, Easing.CubicOut);
         StyleNav(NavNearbyPill, NavNearbyIcon, NavNearbyText, section == "nearby");
         StyleNav(NavTransfersPill, NavTransfersIcon, NavTransfersText, section == "transfers");
+        StyleNav(NavFilesPill, NavFilesIcon, NavFilesText, section == "files");
         StyleNav(NavSettingsPill, NavSettingsIcon, NavSettingsText, section == "settings");
         if (section == "nearby") _ = ProcessSharedFilesAsync();
         if (section == "transfers") RefreshHistory();
+        if (section == "files") _ = RefreshLibraryAsync();
     }
 
     private void StyleNav(Border pill, Label icon, Label text, bool selected)
@@ -1462,14 +1654,13 @@ public partial class MainPage : ContentPage
         TransferProgressBar.Progress = existingProgress;
         TransferPercentLabel.Text = $"{existingProgress * 100:0}%";
         TransferSpeedLabel.Text = "";
-        MiniProgressBar.Progress = existingProgress;
-        MiniProgressLabel.Text = $"{existingProgress * 100:0}%";
-        MiniProgressGlyph.Text = incoming ? "" : "";
+        UpdateMiniDock(incoming, peerName, existingProgress,
+            existingProgress > 0 ? "Transferring…" : state);
         _transferMinimized = false;
+        HideMiniDock();
         TransferOverlay.IsVisible = true;
         TransferOverlay.Opacity = 0;
         _ = TransferOverlay.FadeTo(1, 160, Easing.CubicOut);
-        MiniProgressPill.IsVisible = false;
     }
 
     private void UpdateTransferOverlay(TransferProgress progress)
@@ -1495,12 +1686,16 @@ public partial class MainPage : ContentPage
         TransferSpeedLabel.Text = progress.BytesDone > 0
             ? $"{TransferOffer.FormatBytes(progress.BytesDone)} of {TransferOffer.FormatBytes(progress.BytesTotal)}"
             : "";
-        MiniProgressBar.Progress = pct;
-        MiniProgressLabel.Text = $"{pct * 100:0}%";
-        MiniProgressGlyph.Text = progress.IsIncoming ? "" : "";
+        UpdateMiniDock(progress.IsIncoming, progress.PeerName, pct,
+            progress.State switch
+            {
+                "preparing" => "Preparing files",
+                "waiting" => $"Waiting for {progress.PeerName}",
+                _ => $"{progress.FilesDone}/{progress.FilesTotal} files · {progress.SpeedText}"
+            });
         TransferActionButton.Text = "Cancel";
         if (!_transferMinimized) TransferOverlay.IsVisible = true;
-        else MiniProgressPill.IsVisible = true;
+        else ShowMiniDock();
     }
 
     private void FinishTransferOverlay(string transferId, bool success)
@@ -1510,14 +1705,27 @@ public partial class MainPage : ContentPage
         {
             return;
         }
-        TransferProgressBar.Progress = 1;
-        TransferPercentLabel.Text = "100%";
+        if (success)
+        {
+            TransferProgressBar.Progress = 1;
+            TransferPercentLabel.Text = "100%";
+            MiniProgressBar.Progress = 1;
+            MiniProgressLabel.Text = "100%";
+            MiniProgressGlyph.Text = "\uE86C";
+            MiniProgressStatusLabel.Text = "Complete";
+            MiniProgressCancelButton.IsVisible = false;
+        }
+        else
+        {
+            TransferPercentLabel.Text = "—";
+            MiniProgressLabel.Text = "!";
+            MiniProgressGlyph.Text = "\uE001";
+            MiniProgressStatusLabel.Text = "Stopped";
+            MiniProgressCancelButton.IsVisible = false;
+        }
         TransferSpeedLabel.Text = "";
         TransferStateLabel.Text = success ? "Complete" : "Stopped";
         TransferActionButton.Text = "Done";
-        MiniProgressBar.Progress = 1;
-        MiniProgressLabel.Text = success ? "100%" : "!";
-        MiniProgressGlyph.Text = success ? "" : "";
         _activeTransferId = null;
         if (!_transferMinimized)
         {
@@ -1525,7 +1733,8 @@ public partial class MainPage : ContentPage
         }
         else
         {
-            MiniProgressPill.IsVisible = true;
+            ShowMiniDock();
+            ScheduleMiniDockHide(success ? 3200 : 4800);
         }
     }
 
@@ -1533,13 +1742,13 @@ public partial class MainPage : ContentPage
     {
         _transferMinimized = true;
         TransferOverlay.IsVisible = false;
-        MiniProgressPill.IsVisible = true;
+        ShowMiniDock();
     }
 
     private void RestoreTransferOverlay_Tapped(object? sender, TappedEventArgs e)
     {
         _transferMinimized = false;
-        MiniProgressPill.IsVisible = false;
+        HideMiniDock();
         TransferOverlay.IsVisible = true;
     }
 
@@ -1551,8 +1760,85 @@ public partial class MainPage : ContentPage
             return;
         }
         TransferOverlay.IsVisible = false;
-        MiniProgressPill.IsVisible = false;
+        HideMiniDock();
         _transferMinimized = false;
+    }
+
+    private void UpdateMiniDock(bool incoming, string peerName, double progress, string status)
+    {
+        MiniProgressTitleLabel.Text = incoming
+            ? $"Receiving from {peerName}"
+            : $"Sending to {peerName}";
+        var fraction = Math.Clamp(progress, 0, 1);
+        MiniProgressLabel.Text = $"{fraction * 100:0}%";
+        MiniProgressBar.Progress = fraction;
+        MiniProgressGlyph.Text = incoming ? "\uE896" : "\uE898";
+        MiniProgressStatusLabel.Text = status;
+        MiniProgressCancelButton.IsVisible = true;
+    }
+
+    private void ShowMiniDock()
+    {
+        CancelMiniDockHide();
+        if (MiniProgressPill.IsVisible) return;
+        _miniDockToken++;
+        MiniProgressPill.Opacity = 0;
+        MiniProgressPill.TranslationY = 16;
+        MiniProgressPill.IsVisible = true;
+        _ = MiniProgressPill.FadeTo(1, 160, Easing.CubicOut);
+        _ = MiniProgressPill.TranslateTo(0, 0, 200, Easing.CubicOut);
+    }
+
+    private void HideMiniDock()
+    {
+        CancelMiniDockHide();
+        if (!MiniProgressPill.IsVisible) return;
+        var token = ++_miniDockToken;
+        _ = HideMiniDockAsync(token);
+    }
+
+    private async Task HideMiniDockAsync(int token)
+    {
+        await MiniProgressPill.FadeTo(0, 130, Easing.CubicIn);
+        if (token != _miniDockToken) return;
+        MiniProgressPill.IsVisible = false;
+        MiniProgressPill.Opacity = 1;
+        MiniProgressPill.TranslationY = 0;
+    }
+
+    private void ScheduleMiniDockHide(int milliseconds)
+    {
+        CancelMiniDockHide();
+        var source = new CancellationTokenSource();
+        _miniDockHide = source;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(milliseconds, source.Token);
+            }
+            catch (TaskCanceledException)
+            {
+                return;
+            }
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                if (!source.IsCancellationRequested) HideMiniDock();
+            });
+        });
+    }
+
+    private void CancelMiniDockHide()
+    {
+        try { _miniDockHide?.Cancel(); } catch { }
+        _miniDockHide = null;
+    }
+
+    private void MiniProgressCancel_Click(object? sender, EventArgs e)
+    {
+        if (string.IsNullOrEmpty(_activeTransferId)) return;
+        if (_engine?.Cancel(_activeTransferId) == true)
+            ShowToast("Cancelling…", IconInfo);
     }
 
     // ── Temporary QR link ────────────────────────────────────────────
@@ -2529,6 +2815,9 @@ public partial class MainPage : ContentPage
     public void OnAppBackgrounded()
     {
         _appVisible = false;
+        // The native viewer has no background media session; stop playback
+        // rather than leaving a video or track running behind the launcher.
+        MediaViewer.DismissCurrent();
         if (_settings.BiometricUnlock) _backgroundedAt = DateTime.UtcNow;
     }
 

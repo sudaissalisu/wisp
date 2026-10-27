@@ -176,6 +176,8 @@ public sealed class HistoryItem
     public string StatusText => Entry.StatusText;
     public string SizeText => Entry.SizeText;
     public string WhenText => Entry.WhenText;
+    public bool CanOpen => Entry.IsIncoming && Entry.Succeeded &&
+                           !string.IsNullOrWhiteSpace(Entry.SavedPath);
     public Brush StateBrush { get; }
 }
 
