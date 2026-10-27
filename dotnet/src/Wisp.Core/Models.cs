@@ -10,7 +10,7 @@ public sealed record WispConfig
     public int ListenPort { get; init; }
     public int DiscoveryPort { get; init; } = 47778;
     public bool AutoAccept { get; init; }
-    public int DataChannels { get; init; } = 4;
+    public int DataChannels { get; init; }
     public int ConflictPolicy { get; init; }
 }
 

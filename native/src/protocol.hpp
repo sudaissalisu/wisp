@@ -128,6 +128,10 @@ private:
 };
 
 bool send_frame(TlsConnection& connection, const Frame& frame, std::string& error);
+// Sends a DATA frame without copying the chunk into a payload vector.
+bool send_data_frame(TlsConnection& connection, uint64_t transfer_id,
+                     uint32_t file_index, uint64_t offset, const uint8_t hash[32],
+                     const void* data, size_t size, std::string& error);
 bool recv_frame(TlsConnection& connection, Frame& frame, std::string& error);
 
 // The optional link token is appended after the platform string. Older peers

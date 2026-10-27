@@ -53,7 +53,8 @@ typedef struct wisp_engine_config {
     int discovery_port;
     /* Used by the CLI and tests. Production UI should leave this 0 and answer offers. */
     int auto_accept;
-    /* Number of parallel TLS data channels (1..8). */
+    /* Parallel TLS data channels: 0 = adapt to CPU cores and transfer size,
+       1..8 = fixed maximum. The sender may use fewer for small transfers. */
     int data_channels;
     /* 0 = rename on conflict, 1 = overwrite, 2 = skip. */
     int conflict_policy;

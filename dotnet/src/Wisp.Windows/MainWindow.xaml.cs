@@ -272,7 +272,7 @@ public sealed partial class MainWindow : Window
                 SaveDirectory = _settings.SaveDirectory,
                 IdentityDirectory = _identityDirectory,
                 DiscoveryPort = 47778,
-                DataChannels = 4
+                DataChannels = 0
             }));
             UpdateIdentityUi();
             var peers = engine.Self;

@@ -27,6 +27,40 @@ bool send_frame(TlsConnection& connection, const Frame& frame, std::string& erro
     return true;
 }
 
+bool send_data_frame(TlsConnection& connection, uint64_t transfer_id,
+                     uint32_t file_index, uint64_t offset, const uint8_t hash[32],
+                     const void* data, size_t size, std::string& error) {
+    const size_t payload_size = 4 + 8 + 32 + size;
+    if (payload_size > kMaxFramePayload) {
+        error = "data frame is too large";
+        return false;
+    }
+
+    // Send the frame header and chunk metadata separately, then the file bytes
+    // from the caller's buffer. The previous path built a second 4 MiB vector
+    // and copied every chunk into it before encrypting.
+    Writer header;
+    header.u32(kFrameMagic);
+    header.u16(static_cast<uint16_t>(FrameType::Data));
+    header.u16(0);
+    header.u32(static_cast<uint32_t>(payload_size));
+    header.u64(transfer_id);
+
+    Writer meta;
+    meta.u32(file_index);
+    meta.u64(offset);
+    meta.bytes(hash, 32);
+
+    if (!connection.send_all(header.data().data(), header.data().size(), error)) {
+        return false;
+    }
+    if (!connection.send_all(meta.data().data(), meta.data().size(), error)) {
+        return false;
+    }
+    if (size != 0 && !connection.send_all(data, size, error)) return false;
+    return true;
+}
+
 bool recv_frame(TlsConnection& connection, Frame& frame, std::string& error) {
     uint8_t header[20];
     if (!connection.recv_all(header, sizeof(header), error)) return false;

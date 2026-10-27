@@ -448,8 +448,12 @@ void Engine::run_data_channel(TlsConnection& tls, Frame attach_frame) {
     session->active_data_channels.fetch_add(1);
     tls.socket().set_timeouts(30000, 30000);
 
+    // Reuse one payload buffer for every chunk on this channel. recv_frame()
+    // resizes it, so after the first chunk the 4 MiB capacity is reused
+    // instead of allocating and freeing a vector per chunk.
+    Frame frame;
+    frame.payload.reserve(kChunkSize + 64);
     while (running_.load() && !session->cancel.load() && !session->failed.load()) {
-        Frame frame;
         if (!recv_frame(tls, frame, error)) {
             if (error != "peer closed the connection") {
                 set_failure(session->failed, session->error_mutex, session->error,

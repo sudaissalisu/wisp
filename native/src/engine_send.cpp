@@ -8,6 +8,18 @@
 
 namespace wisp {
 
+static int automatic_channel_count(uint64_t total_bytes) {
+    unsigned cores = std::thread::hardware_concurrency();
+    if (cores == 0) cores = 4;
+    // Leave headroom for the encryption threads on each side and the UI. Large
+    // transfers get more parallel TLS streams; small ones do not pay for the
+    // extra handshakes.
+    int channels = cores >= 8 ? 6 : cores >= 6 ? 5 : cores >= 4 ? 4 : 2;
+    if (total_bytes < 32ull * 1024ull * 1024ull) channels = std::min(channels, 4);
+    if (total_bytes < 4ull * 1024ull * 1024ull) channels = std::min(channels, 2);
+    return std::max(1, channels);
+}
+
 void Engine::remove_outgoing(const std::string& transfer_id) {
     std::lock_guard<std::mutex> lock(outgoing_mutex_);
     outgoing_.erase(transfer_id);
@@ -164,9 +176,15 @@ void Engine::run_sender(const std::shared_ptr<OutgoingSession>& session) {
             });
         }
 
+        const int configured_channels = config_.data_channels > 0
+            ? config_.data_channels
+            : automatic_channel_count(session->total_bytes);
         const uint64_t channel_count = std::min<uint64_t>(
-            static_cast<uint64_t>(config_.data_channels),
+            static_cast<uint64_t>(configured_channels),
             std::max<uint64_t>(1, session->total_chunks));
+        log(WISP_LOG_INFO, "transfer " + session->transfer_id_hex + " using " +
+                               std::to_string(channel_count) + " data channels for " +
+                               std::to_string(session->total_bytes) + " bytes");
         std::vector<std::thread> workers;
         for (uint64_t channel = 0; channel < channel_count && session->total_chunks > 0;
              ++channel) {
@@ -267,13 +285,9 @@ void Engine::run_sender(const std::shared_ptr<OutgoingSession>& session) {
                             break;
                         }
                         const auto digest = sha256_bytes(buffer.data(), length);
-                        Frame data_frame;
-                        data_frame.type = FrameType::Data;
-                        data_frame.transfer_id = session->transfer_id;
-                        data_frame.payload = encode_data(
-                            static_cast<uint32_t>(file_index), offset, digest.data(),
-                            buffer.data(), length);
-                        if (!send_frame(data, data_frame, error)) {
+                        if (!send_data_frame(data, session->transfer_id, file_index,
+                                            offset, digest.data(), buffer.data(),
+                                            length, error)) {
                             set_failure(session->failed, session->error_mutex,
                                         session->error, error);
                             break;

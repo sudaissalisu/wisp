@@ -94,7 +94,11 @@ Engine::Engine(EngineConfig config, EventCallback event_callback, LogCallback lo
       log_callback_(std::move(log_callback)) {
     if (config_.name.empty()) config_.name = "Wisp Device";
     if (config_.name.size() > 64) config_.name.resize(64);
-    config_.data_channels = std::clamp(config_.data_channels, 1, 8);
+    // 0 selects the adaptive channel count in the sender (CPU cores and file
+    // size); an explicit 1-8 pins the number of parallel TLS streams.
+    if (config_.data_channels > 0) {
+        config_.data_channels = std::clamp(config_.data_channels, 1, 8);
+    }
     if (config_.save_dir.empty()) {
         config_.save_dir = path_to_utf8(fs::current_path() / "Wisp Downloads");
     }
