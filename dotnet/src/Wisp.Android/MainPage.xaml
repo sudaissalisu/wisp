@@ -482,7 +482,8 @@
                                        TextColor="{AppThemeBinding Light={StaticResource MutedLight}, Dark={StaticResource MutedDark}}" />
                                 <VerticalStackLayout Grid.Column="1" Spacing="1" VerticalOptions="Center">
                                     <Label Text="Auto-accept trusted devices" Style="{StaticResource RowLabel}" />
-                                    <Label Text="New devices always ask first" Style="{StaticResource TinyLabel}" />
+                                    <Label Text="Trusted keys skip the code; this accepts them without asking."
+                                           Style="{StaticResource TinyLabel}" />
                                 </VerticalStackLayout>
                                 <Switch x:Name="AutoAcceptSwitch" Grid.Column="2" OnColor="{StaticResource Mint}" ThumbColor="White"
                                         Toggled="AutoAcceptToggled" HorizontalOptions="End" />
@@ -749,7 +750,19 @@
                         <Label x:Name="OfferFilesLabel" Style="{StaticResource TinyLabel}"
                                LineBreakMode="TailTruncation" MaxLines="3" />
                     </Border>
-                    <Border Padding="16,12" BackgroundColor="{StaticResource MintSoft}"
+                    <Border x:Name="OfferTrustedNote" IsVisible="False" Padding="14,10"
+                            BackgroundColor="{StaticResource MintSoft}"
+                            Stroke="{StaticResource MintBrush}" StrokeThickness="1"
+                            StrokeShape="RoundRectangle 14">
+                        <HorizontalStackLayout Spacing="8">
+                            <Label FontFamily="MaterialIcons-Regular" Text="&#xE8E8;" FontSize="16"
+                                   TextColor="{StaticResource Mint}" VerticalOptions="Center" />
+                            <Label Text="Trusted device — its key is already pinned. No code to compare."
+                                   Style="{StaticResource TinyLabel}" TextColor="{StaticResource Mint}"
+                                   VerticalOptions="Center" />
+                        </HorizontalStackLayout>
+                    </Border>
+                    <Border x:Name="OfferCodeCard" Padding="16,12" BackgroundColor="{StaticResource MintSoft}"
                             Stroke="{StaticResource MintBrush}" StrokeThickness="1"
                             StrokeShape="RoundRectangle 16">
                         <VerticalStackLayout Spacing="3">
@@ -760,7 +773,7 @@
                                    TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
                         </VerticalStackLayout>
                     </Border>
-                    <HorizontalStackLayout Spacing="10">
+                    <HorizontalStackLayout x:Name="OfferTrustRow" Spacing="10">
                         <Switch x:Name="OfferTrustSwitch" OnColor="{StaticResource Mint}" ThumbColor="White" VerticalOptions="Center" />
                         <Label Text="Trust this device" Style="{StaticResource MutedLabel}" VerticalOptions="Center" />
                     </HorizontalStackLayout>

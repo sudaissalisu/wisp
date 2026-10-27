@@ -342,10 +342,23 @@ public sealed partial class MainWindow : Window
         if (!ReferenceEquals(sender, _engine)) return;
         _dispatcher.TryEnqueue(() =>
         {
+            // A pinned device already has an authenticated key; asking for the
+            // short code again on every transfer would be redundant.
+            if (IsTrustedPeer(pairing.PeerId)) return;
             ShowToast($"Verify code {pairing.Code}",
                 $"Compare this code with {pairing.PeerName} before accepting. Matching codes prove the connection is direct.",
                 InfoBarSeverity.Informational, autoClose: false);
         });
+    }
+
+    private bool IsTrustedPeer(string peerId)
+    {
+        if (string.IsNullOrWhiteSpace(peerId)) return false;
+        var fingerprint = _engine?.Peers
+            .FirstOrDefault(peer => peer.Id.Equals(peerId, StringComparison.OrdinalIgnoreCase))
+            ?.Fingerprint;
+        return !string.IsNullOrWhiteSpace(fingerprint) &&
+               _trustStore.Find(fingerprint) is not null;
     }
 
     private void OnProgressChanged(object? sender, TransferProgress progress)
@@ -550,8 +563,11 @@ public sealed partial class MainWindow : Window
         if (_engine is null) return;
         try
         {
-            var trusted = _trustStore.Find(offer.Fingerprint);
-            if (_settings.AutoAcceptTrusted && trusted?.AutoAccept == true)
+            // The offer fingerprint comes from the TLS certificate of this
+            // connection, so a match means the same key the user pinned.
+            var trustedPeer = _trustStore.Find(offer.Fingerprint);
+            var trusted = trustedPeer is not null;
+            if (_settings.AutoAcceptTrusted && trustedPeer?.AutoAccept == true)
             {
                 AcceptOffer(offer, trust: false);
                 ShowToast("Receiving", $"From {offer.PeerName} · {offer.FileCountText}", InfoBarSeverity.Success);
@@ -563,7 +579,7 @@ public sealed partial class MainWindow : Window
             {
                 if (_closing) return;
                 TryBringToFront();
-                var dialog = BuildOfferDialog(offer);
+                var dialog = BuildOfferDialog(offer, trusted);
                 var result = await dialog.Dialog.ShowAsync();
                 if (result == ContentDialogResult.Primary)
                 {
@@ -622,12 +638,12 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private OfferDialog BuildOfferDialog(TransferOffer offer)
+    private OfferDialog BuildOfferDialog(TransferOffer offer, bool trusted)
     {
         var dialog = new ContentDialog
         {
             XamlRoot = RootGrid.XamlRoot,
-            Title = "Incoming files",
+            Title = trusted ? "Files from a trusted device" : "Incoming files",
             PrimaryButtonText = "Accept",
             CloseButtonText = "Decline",
             DefaultButton = ContentDialogButton.Primary
@@ -683,29 +699,59 @@ public sealed partial class MainWindow : Window
             MaxHeight = 86
         });
 
-        var codeBorder = new Border
+        if (trusted)
         {
-            Background = new SolidColorBrush(Color.FromArgb(20, 69, 227, 180)),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(90, 69, 227, 180)),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(14),
-            Padding = new Thickness(14, 10, 14, 10)
-        };
-        var codeStack = new StackPanel { Spacing = 2 };
-        codeStack.Children.Add(new TextBlock { Text = "VERIFY THIS CODE ON THE OTHER DEVICE", FontSize = 9, CharacterSpacing = 80, Opacity = 0.65 });
-        codeStack.Children.Add(new TextBlock
+            var trustedBorder = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(20, 69, 227, 180)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(90, 69, 227, 180)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(14, 10, 14, 10)
+            };
+            var trustedStack = new StackPanel { Spacing = 2 };
+            trustedStack.Children.Add(new TextBlock
+            {
+                Text = "TRUSTED DEVICE",
+                FontSize = 9,
+                CharacterSpacing = 80,
+                Opacity = 0.65
+            });
+            trustedStack.Children.Add(new TextBlock
+            {
+                Text = "This device's key is already pinned, so there is no code to compare.",
+                FontSize = 12,
+                TextWrapping = TextWrapping.Wrap
+            });
+            trustedBorder.Child = trustedStack;
+            root.Children.Add(trustedBorder);
+        }
+        else
         {
-            Text = offer.PairingCode,
-            FontFamily = new FontFamily("Consolas"),
-            FontSize = 24,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            CharacterSpacing = 140
-        });
-        codeBorder.Child = codeStack;
-        root.Children.Add(codeBorder);
+            var codeBorder = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(20, 69, 227, 180)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(90, 69, 227, 180)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(14, 10, 14, 10)
+            };
+            var codeStack = new StackPanel { Spacing = 2 };
+            codeStack.Children.Add(new TextBlock { Text = "VERIFY THIS CODE ON THE OTHER DEVICE", FontSize = 9, CharacterSpacing = 80, Opacity = 0.65 });
+            codeStack.Children.Add(new TextBlock
+            {
+                Text = offer.PairingCode,
+                FontFamily = new FontFamily("Consolas"),
+                FontSize = 24,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                CharacterSpacing = 140
+            });
+            codeBorder.Child = codeStack;
+            root.Children.Add(codeBorder);
+        }
 
         var trust = new CheckBox { Content = "Trust this device and remember its key", IsChecked = false };
-        root.Children.Add(trust);
+        if (!trusted) root.Children.Add(trust);
 
         dialog.Content = root;
         return new OfferDialog(dialog, trust);

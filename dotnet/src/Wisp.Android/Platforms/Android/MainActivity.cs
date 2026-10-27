@@ -22,9 +22,19 @@ namespace Wisp.Android;
     DataMimeType = "*/*")]
 public class MainActivity : MauiAppCompatActivity
 {
+    private BackPressCallback? _backPressCallback;
+
     protected override void OnCreate(Bundle? savedInstanceState)
     {
         base.OnCreate(savedInstanceState);
+
+        // On .NET 10 MAUI the root page's OnBackButtonPressed override is not
+        // enough: back can finish the activity before the page sees it. Register
+        // an AndroidX callback so Wisp can close a sheet or step back through
+        // tabs, and fall through to the system only when nothing is left.
+        _backPressCallback = new BackPressCallback(this);
+        OnBackPressedDispatcher.AddCallback(this, _backPressCallback);
+
         ShareInbox.HandleIntent(Intent);
         AppActionInbox.HandleIntent(Intent);
     }
@@ -34,6 +44,34 @@ public class MainActivity : MauiAppCompatActivity
         base.OnNewIntent(intent);
         ShareInbox.HandleIntent(intent);
         AppActionInbox.HandleIntent(intent);
+    }
+
+    private sealed class BackPressCallback : AndroidX.Activity.OnBackPressedCallback
+    {
+        private readonly MainActivity _activity;
+
+        public BackPressCallback(MainActivity activity) : base(true)
+        {
+            _activity = activity;
+        }
+
+        public override void HandleOnBackPressed()
+        {
+            var page = Microsoft.Maui.Controls.Application.Current?.Windows
+                .FirstOrDefault()?.Page as MainPage;
+            if (page?.HandleBackNavigation() == true) return;
+
+            // Nothing left in Wisp to close: let the system handle back.
+            Enabled = false;
+            try
+            {
+                _activity.OnBackPressedDispatcher.OnBackPressed();
+            }
+            finally
+            {
+                Enabled = true;
+            }
+        }
     }
 }
 

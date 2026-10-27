@@ -67,6 +67,8 @@ public partial class MainPage : ContentPage
     private bool _foregroundActive;
     private bool _processingShares;
     private string _activeSection = "nearby";
+    private readonly List<string> _sectionHistory = [];
+    private bool _navigatingBack;
     private string _settingsCategory = "general";
     private readonly List<string> _pendingSharePaths = [];
     private string? _activeTransferId;
@@ -173,9 +175,14 @@ public partial class MainPage : ContentPage
         await ProcessAppActionsAsync();
     }
 
-    protected override bool OnBackButtonPressed()
+    /// <summary>
+    /// Handles Android back in this single-page app: close the topmost sheet,
+    /// leave a settings category, or return to the previous tab. Returns false
+    /// only when there is nothing left to close, which lets Android leave the app.
+    /// </summary>
+    public bool HandleBackNavigation()
     {
-        // Android back dismisses the topmost sheet instead of leaving Wisp.
+        if (_closing) return false;
         if (LinkOverlay.IsVisible)
         {
             CloseTemporaryLink_Click(this, EventArgs.Empty);
@@ -186,23 +193,55 @@ public partial class MainPage : ContentPage
             CloseShareSheet_Click(this, EventArgs.Empty);
             return true;
         }
+        if (OfferOverlay.IsVisible)
+        {
+            // Back declines explicitly so the sender is not left waiting.
+            DeclineOffer_Click(this, EventArgs.Empty);
+            return true;
+        }
         if (TransferOverlay.IsVisible)
         {
+            // Keep the transfer running in the background; back only minimizes.
             MinimizeTransfer_Click(this, EventArgs.Empty);
             return true;
         }
-        if (OfferOverlay.IsVisible)
-        {
-            _ = HideOfferAsync();
-            return true;
-        }
+        if (LockOverlay.IsVisible || OnboardingOverlay.IsVisible) return true;
         if (SettingsDetailHeader.IsVisible)
         {
             ShowSettingsMenu();
             return true;
         }
-        return base.OnBackButtonPressed();
+        if (_activeSection != "nearby")
+        {
+            if (!GoBackToPreviousSection()) SetSection("nearby");
+            return true;
+        }
+        return false;
     }
+
+    private bool GoBackToPreviousSection()
+    {
+        while (_sectionHistory.Count > 0)
+        {
+            var index = _sectionHistory.Count - 1;
+            var target = _sectionHistory[index];
+            _sectionHistory.RemoveAt(index);
+            if (target == _activeSection) continue;
+            _navigatingBack = true;
+            try
+            {
+                SetSection(target);
+            }
+            finally
+            {
+                _navigatingBack = false;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    protected override bool OnBackButtonPressed() => HandleBackNavigation();
 
     public void Shutdown()
     {
@@ -369,7 +408,28 @@ public partial class MainPage : ContentPage
     {
         if (!ReferenceEquals(sender, _engine)) return;
         MainThread.BeginInvokeOnMainThread(() =>
-            ShowToast($"Verify code {pairing.Code} with {pairing.PeerName}", IconInfo, durationSeconds: 12));
+        {
+            // A trusted peer's certificate is already pinned, so the paired
+            // key already proves the same device. Showing the short code again
+            // would just ask the user to redo a check they finished earlier.
+            if (IsTrustedPeer(pairing.PeerId)) return;
+            ShowToast($"Verify code {pairing.Code} with {pairing.PeerName}", IconInfo, durationSeconds: 12);
+        });
+    }
+
+    private bool IsTrustedPeer(string peerId)
+    {
+        if (string.IsNullOrWhiteSpace(peerId)) return false;
+        var fingerprint = _engine?.Peers
+            .FirstOrDefault(peer => peer.Id.Equals(peerId, StringComparison.OrdinalIgnoreCase))
+            ?.Fingerprint;
+        if (string.IsNullOrWhiteSpace(fingerprint) && _linkPeer is not null &&
+            _linkPeer.Id.Equals(peerId, StringComparison.OrdinalIgnoreCase))
+        {
+            fingerprint = _linkPeer.Fingerprint;
+        }
+        return !string.IsNullOrWhiteSpace(fingerprint) &&
+               _trustStore.Find(fingerprint) is not null;
     }
 
     private void OnProgress(object? sender, TransferProgress progress)
@@ -783,8 +843,11 @@ public partial class MainPage : ContentPage
     private async Task HandleOfferAsync(TransferOffer offer)
     {
         if (_engine is null || _closing) return;
+        // The fingerprint in the offer comes from the TLS certificate of this
+        // connection. If it matches a pinned device, the authenticated key is
+        // the same one the user verified before and the short code is redundant.
         var trusted = _trustStore.Find(offer.Fingerprint);
-        if (_settings.AutoAcceptTrusted && trusted?.AutoAccept == true)
+        if (_settings.AutoAcceptTrusted && trusted is not null)
         {
             AcceptOffer(offer, trust: false);
             ShowToast($"Receiving from {offer.PeerName}", IconCheck);
@@ -801,11 +864,16 @@ public partial class MainPage : ContentPage
         OfferPeerLabel.Text = offer.PeerName;
         OfferInitials.Text = AndroidPalette.InitialsOf(offer.PeerName);
         OfferAvatar.Background = AndroidPalette.BrushFor(offer.PeerId);
-        OfferSummaryLabel.Text = $"{offer.FileCountText} · {offer.SizeText}";
+        OfferSummaryLabel.Text = trusted is not null
+            ? $"Trusted device · {offer.FileCountText} · {offer.SizeText}"
+            : $"{offer.FileCountText} · {offer.SizeText}";
         var names = string.Join("\n", offer.Files.Take(4).Select(f => f.Path));
         if (offer.FileCount > 4) names += $"\nand {offer.FileCount - 4} more…";
         OfferFilesLabel.Text = names;
         OfferCodeLabel.Text = offer.PairingCode;
+        OfferCodeCard.IsVisible = trusted is null;
+        OfferTrustRow.IsVisible = trusted is null;
+        OfferTrustedNote.IsVisible = trusted is not null;
         OfferTrustSwitch.IsToggled = false;
         OfferOverlay.IsVisible = true;
         OfferOverlay.Opacity = 0;
@@ -1053,6 +1121,20 @@ public partial class MainPage : ContentPage
     private void SetSection(string section)
     {
         if (_activeSection == section) return;
+        if (!_navigatingBack)
+        {
+            // Nearby is the home tab; tapping it resets the back stack. Other
+            // tabs remember where they came from so back returns to that tab.
+            if (section == "nearby")
+            {
+                _sectionHistory.Clear();
+            }
+            else
+            {
+                _sectionHistory.Remove(section);
+                _sectionHistory.Add(_activeSection);
+            }
+        }
         _activeSection = section;
         var incoming = section == "nearby" ? (VisualElement)NearbyScroll
             : section == "transfers" ? (VisualElement)TransfersScroll
