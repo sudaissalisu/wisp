@@ -187,6 +187,37 @@ int wisp_engine_add_peer(wisp_engine* engine,
     }
 }
 
+int wisp_engine_set_link_token(wisp_engine* engine, const char* link_token) {
+    if (!engine || !engine->impl) return -1;
+    try {
+        engine->impl->set_link_token(link_token ? link_token : "");
+        return 0;
+    } catch (...) {
+        return -3;
+    }
+}
+
+int wisp_engine_set_expected_link_token(wisp_engine* engine,
+                                        const char* expected_token) {
+    if (!engine || !engine->impl) return -1;
+    try {
+        engine->impl->set_expected_link_token(expected_token ? expected_token : "");
+        return 0;
+    } catch (...) {
+        return -3;
+    }
+}
+
+int wisp_engine_set_bind_address(wisp_engine* engine, const char* address) {
+    if (!engine || !engine->impl) return -1;
+    try {
+        engine->impl->set_bind_address(address ? address : "");
+        return 0;
+    } catch (...) {
+        return -3;
+    }
+}
+
 int wisp_engine_get_peers(wisp_engine* engine, char* out, size_t out_size) {
     if (!engine || !engine->impl) return -1;
     try {

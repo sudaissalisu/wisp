@@ -109,7 +109,8 @@ void Engine::run_receiver_control(TlsConnection& tls, const std::string& peer_fi
     std::string error;
     std::string sender_name;
     std::string sender_platform;
-    if (!decode_hello(hello_frame.payload, sender_name, sender_platform, error)) {
+    std::string link_token;
+    if (!decode_hello(hello_frame.payload, sender_name, sender_platform, link_token, error)) {
         log(WISP_LOG_WARN, "bad hello: " + error);
         return;
     }
@@ -124,6 +125,22 @@ void Engine::run_receiver_control(TlsConnection& tls, const std::string& peer_fi
         }
     }
     tls.socket().set_timeouts(300000, 30000);
+
+    // A QR-created temporary link pins a one-time token in the QR code. The
+    // scanner presents it in Hello; consume it so a replayed hello is refused.
+    const bool had_expected_token = !expected_link_token().empty();
+    if (!consume_expected_link_token(link_token, peer_fingerprint)) {
+        log(WISP_LOG_WARN, "temporary link token rejected from " +
+                               (sender_name.empty() ? std::string("unknown device")
+                                                    : sender_name));
+        send_error_frame(tls, 0, "temporary link token rejected");
+        return;
+    }
+    if (had_expected_token) {
+        log(WISP_LOG_INFO, "temporary link token accepted from " +
+                               (sender_name.empty() ? std::string("unknown device")
+                                                    : sender_name));
+    }
 
     Frame offer_frame;
     if (!recv_frame(tls, offer_frame, error)) {
@@ -360,6 +377,10 @@ void Engine::run_receiver_control(TlsConnection& tls, const std::string& peer_fi
              error_event_json(session->transfer_id_hex, "receive", peer, error));
         return;
     }
+
+    // Publish the final byte count before completion so slower UI updates can
+    // never leave the receiving meter short of 100%.
+    incoming_progress(session, true);
 
     {
         Frame done;

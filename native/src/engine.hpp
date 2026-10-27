@@ -51,6 +51,19 @@ public:
                  const std::string& save_dir, std::string& error);
     bool cancel(const std::string& transfer_id, std::string& error);
     bool add_peer(const PeerInfo& peer, std::string& error);
+    // QR temporary-link support. The sender presents the token in Hello; the
+    // receiver binds it to the first peer fingerprint and permits only that peer
+    // to reuse it. Empty clears either value.
+    void set_link_token(const std::string& token);
+    void set_expected_link_token(const std::string& token);
+    std::string link_token() const;
+    std::string expected_link_token() const;
+    bool consume_expected_link_token(const std::string& presented,
+                                     const std::string& peer_fingerprint);
+    // Source address for outgoing transfer sockets. Used by the Android
+    // LocalOnlyHotspot host, whose AP is not a ConnectivityManager network.
+    void set_bind_address(const std::string& address);
+    std::string bind_address() const;
     std::string peers_json() const;
     std::string peer() const;
     std::string public_key_fingerprint() const;
@@ -91,6 +104,8 @@ private:
         std::string error;
         uint64_t started_ms = 0;
         std::atomic<uint64_t> last_progress_ms{0};
+        std::atomic<uint64_t> last_progress_log_ms{0};
+        std::atomic<bool> data_progress_started{false};
         std::mutex state_mutex;
         std::condition_variable state_cv;
     };
@@ -124,6 +139,8 @@ private:
         std::mutex file_counter_mutex;
         uint64_t started_ms = 0;
         std::atomic<uint64_t> last_progress_ms{0};
+        std::atomic<uint64_t> last_progress_log_ms{0};
+        std::atomic<bool> data_progress_started{false};
         std::mutex state_mutex;
         std::condition_variable state_cv;
     };
@@ -160,6 +177,17 @@ private:
 
     mutable std::mutex peers_mutex_;
     std::map<std::string, PeerInfo> peers_;
+
+    mutable std::mutex link_token_mutex_;
+    std::string link_token_;
+    std::string expected_link_token_;
+    // Set when the QR token is first accepted. Later connections must present
+    // the same token from the same certificate fingerprint.
+    std::string bound_link_token_;
+    std::string bound_link_fingerprint_;
+
+    mutable std::mutex bind_mutex_;
+    std::string bind_address_;
 
     std::mutex outgoing_mutex_;
     std::map<std::string, std::shared_ptr<OutgoingSession>> outgoing_;

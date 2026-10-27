@@ -173,7 +173,30 @@ static bool wait_for_connect(socket_t fd, int timeout_ms) {
     return error == 0;
 }
 
-bool connect_tcp(const std::string& host, int port, int timeout_ms, Socket& out, std::string& error) {
+static bool bind_local_address(socket_t fd, int family, const std::string& address,
+                               std::string& error) {
+    if (address.empty()) return true;
+    addrinfo hints{};
+    hints.ai_family = family;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_NUMERICHOST;
+    addrinfo* results = nullptr;
+    if (getaddrinfo(address.c_str(), "0", &hints, &results) != 0 || !results) {
+        error = "cannot use local address " + address;
+        if (results) freeaddrinfo(results);
+        return false;
+    }
+    const int rc = ::bind(fd, results->ai_addr, static_cast<int>(results->ai_addrlen));
+    freeaddrinfo(results);
+    if (rc != 0) {
+        error = "cannot bind local address " + address + ": " + last_socket_error();
+        return false;
+    }
+    return true;
+}
+
+bool connect_tcp(const std::string& host, int port, int timeout_ms, Socket& out,
+                 std::string& error, const std::string& local_address) {
     net_init();
     if (port <= 0 || port > 65535) {
         error = "invalid port";
@@ -197,6 +220,12 @@ bool connect_tcp(const std::string& host, int port, int timeout_ms, Socket& out,
         socket_t fd = socket(entry->ai_family, entry->ai_socktype, entry->ai_protocol);
         if (fd == WISP_INVALID_SOCKET) {
             last_error = last_socket_error();
+            continue;
+        }
+        std::string bind_error;
+        if (!bind_local_address(fd, entry->ai_family, local_address, bind_error)) {
+            last_error = bind_error;
+            close_socket(fd);
             continue;
         }
 #if defined(_WIN32)

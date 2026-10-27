@@ -30,7 +30,8 @@ void Engine::run_sender(const std::shared_ptr<OutgoingSession>& session) {
 
         std::string error;
         Socket socket;
-        if (!connect_tcp(session->peer.host, session->peer.port, 8000, socket, error)) {
+        if (!connect_tcp(session->peer.host, session->peer.port, 8000, socket, error,
+                         bind_address())) {
             fail(error);
             cleanup();
             return;
@@ -56,7 +57,7 @@ void Engine::run_sender(const std::shared_ptr<OutgoingSession>& session) {
         {
             Frame hello;
             hello.type = FrameType::Hello;
-            hello.payload = encode_hello(config_.name, platform_name());
+            hello.payload = encode_hello(config_.name, platform_name(), link_token());
             if (!send_frame(control, hello, error)) {
                 fail(error);
                 cleanup();
@@ -72,8 +73,9 @@ void Engine::run_sender(const std::shared_ptr<OutgoingSession>& session) {
             }
             std::string peer_name;
             std::string peer_platform;
+            std::string peer_link_token;
             std::string decode_error;
-            decode_hello(ack.payload, peer_name, peer_platform, decode_error);
+            decode_hello(ack.payload, peer_name, peer_platform, peer_link_token, decode_error);
             if (!peer_name.empty()) session->peer.name = peer_name;
         }
         {
@@ -173,7 +175,7 @@ void Engine::run_sender(const std::shared_ptr<OutgoingSession>& session) {
                     std::string error;
                     Socket socket;
                     if (!connect_tcp(session->peer.host, session->peer.port, 8000,
-                                     socket, error)) {
+                                     socket, error, bind_address())) {
                         set_failure(session->failed, session->error_mutex,
                                     session->error, error);
                         return;

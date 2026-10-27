@@ -51,6 +51,23 @@ static void write_pattern(const fs::path& path, size_t size, uint8_t seed) {
     }
 }
 
+static uint64_t json_u64(const std::string& json, const std::string& key) {
+    const std::string needle = "\"" + key + "\":";
+    const size_t position = json.find(needle);
+    if (position == std::string::npos) return 0;
+    size_t cursor = position + needle.size();
+    while (cursor < json.size() &&
+           (json[cursor] == ' ' || json[cursor] == '\t')) {
+        ++cursor;
+    }
+    uint64_t value = 0;
+    while (cursor < json.size() && json[cursor] >= '0' && json[cursor] <= '9') {
+        value = value * 10 + static_cast<uint64_t>(json[cursor] - '0');
+        ++cursor;
+    }
+    return value;
+}
+
 static void test_path_validation() {
     std::string normalized;
     std::string error;
@@ -90,6 +107,10 @@ static void test_engine_transfer(const fs::path& root) {
     std::atomic<bool> sender_ok{false};
     std::atomic<bool> receiver_done{false};
     std::atomic<bool> receiver_ok{false};
+    std::atomic<int> sender_intermediate_progress{0};
+    std::atomic<int> receiver_intermediate_progress{0};
+    std::atomic<uint64_t> sender_last_bytes{0};
+    std::atomic<uint64_t> receiver_last_bytes{0};
     uint64_t completed_bytes = 0;
     uint64_t started = now_ms();
 
@@ -106,7 +127,14 @@ static void test_engine_transfer(const fs::path& root) {
         },
         [&](int type, const std::string& json) {
             std::lock_guard<std::mutex> lock(event_mutex);
-            if (type == 6) {
+            if (type == 4) {
+                const uint64_t done = json_u64(json, "bytes_done");
+                const uint64_t total = json_u64(json, "bytes_total");
+                if (done > 0 && done < total) {
+                    receiver_intermediate_progress.fetch_add(1);
+                    receiver_last_bytes.store(done);
+                }
+            } else if (type == 6) {
                 receiver_done = true;
                 receiver_ok = true;
                 event_cv.notify_all();
@@ -131,7 +159,14 @@ static void test_engine_transfer(const fs::path& root) {
         },
         [&](int type, const std::string& json) {
             std::lock_guard<std::mutex> lock(event_mutex);
-            if (type == 6) {
+            if (type == 4) {
+                const uint64_t done = json_u64(json, "bytes_done");
+                const uint64_t total = json_u64(json, "bytes_total");
+                if (done > 0 && done < total) {
+                    sender_intermediate_progress.fetch_add(1);
+                    sender_last_bytes.store(done);
+                }
+            } else if (type == 6) {
                 sender_done = true;
                 sender_ok = true;
                 for (const auto& entry : fs::recursive_directory_iterator(source_root)) {
@@ -150,6 +185,13 @@ static void test_engine_transfer(const fs::path& root) {
     std::string error;
     CHECK(receiver.start(error));
     CHECK(sender.start(error));
+
+    // Exercise the QR temporary-link token path: the receiver expects one
+    // token, the sender presents it, and the receiver refuses to reuse it.
+    const std::string link_token = "0123456789abcdef0123456789abcdef";
+    receiver.set_expected_link_token(link_token);
+    sender.set_link_token(link_token);
+    sender.set_bind_address("127.0.0.1");
 
     PeerInfo peer;
     peer.id = receiver.own_id();
@@ -180,6 +222,11 @@ static void test_engine_transfer(const fs::path& root) {
     CHECK(sender_ok.load());
     CHECK(receiver_done.load());
     CHECK(receiver_ok.load());
+    CHECK(sender_intermediate_progress.load() > 0);
+    CHECK(receiver_intermediate_progress.load() > 0);
+    CHECK(sender_last_bytes.load() > 0);
+    CHECK(receiver_last_bytes.load() > 0);
+    CHECK(receiver.expected_link_token().empty());
 
     const fs::path received = save_root / "source";
     CHECK(fs::exists(received / "photo.bin"));
@@ -209,6 +256,55 @@ static void test_engine_transfer(const fs::path& root) {
                   << " ms (" << (mib * 1000.0 / static_cast<double>(elapsed))
                   << " MiB/s)\n";
     }
+
+    // The QR token is bound to the first guest identity. A different token from
+    // the same peer must fail, and the original token must still work after
+    // that rejection (for a second transfer over the same link).
+    const fs::path rejected_source = root / "rejected.bin";
+    write_pattern(rejected_source, 4096, 41);
+    {
+        std::lock_guard<std::mutex> lock(event_mutex);
+        sender_done = false;
+        sender_ok = false;
+    }
+    sender.set_link_token("ffffffffffffffffffffffffffffffff");
+    const std::string rejected_id = sender.send_paths(
+        peer.id, {path_to_utf8(rejected_source)}, error);
+    CHECK(!rejected_id.empty());
+    {
+        std::unique_lock<std::mutex> lock(event_mutex);
+        event_cv.wait_for(lock, std::chrono::seconds(20), [&] {
+            return sender_done.load();
+        });
+    }
+    CHECK(sender_done.load());
+    CHECK(!sender_ok.load());
+    CHECK(!fs::exists(save_root / "rejected.bin"));
+
+    const fs::path third_source = root / "third.bin";
+    write_pattern(third_source, 2048, 43);
+    {
+        std::lock_guard<std::mutex> lock(event_mutex);
+        sender_done = false;
+        sender_ok = false;
+        receiver_done = false;
+        receiver_ok = false;
+    }
+    sender.set_link_token(link_token);
+    const std::string third_id = sender.send_paths(
+        peer.id, {path_to_utf8(third_source)}, error);
+    CHECK(!third_id.empty());
+    {
+        std::unique_lock<std::mutex> lock(event_mutex);
+        event_cv.wait_for(lock, std::chrono::seconds(20), [&] {
+            return sender_done && receiver_done;
+        });
+    }
+    CHECK(sender_done.load());
+    CHECK(sender_ok.load());
+    CHECK(receiver_done.load());
+    CHECK(receiver_ok.load());
+    CHECK(fs::exists(save_root / "third.bin"));
 
     sender.stop();
     receiver.stop();

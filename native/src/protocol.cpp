@@ -60,24 +60,32 @@ bool recv_frame(TlsConnection& connection, Frame& frame, std::string& error) {
     return true;
 }
 
-std::vector<uint8_t> encode_hello(const std::string& name, const std::string& platform) {
+std::vector<uint8_t> encode_hello(const std::string& name, const std::string& platform,
+                                  const std::string& link_token) {
     Writer writer;
     writer.u16(kProtocolVersion);
     writer.string(name);
     writer.string(platform);
+    if (!link_token.empty()) writer.string(link_token);
     return writer.take();
 }
 
 bool decode_hello(const std::vector<uint8_t>& payload,
-                  std::string& name, std::string& platform, std::string& error) {
+                  std::string& name, std::string& platform, std::string& link_token,
+                  std::string& error) {
     Reader reader(payload.data(), payload.size());
     uint16_t version = 0;
+    link_token.clear();
     if (!reader.u16(version) || !reader.string(name, 512) || !reader.string(platform, 128)) {
         error = "malformed hello";
         return false;
     }
     if (version != kProtocolVersion) {
         error = "protocol version mismatch";
+        return false;
+    }
+    if (reader.remaining() != 0 && !reader.string(link_token, 128)) {
+        error = "malformed hello link token";
         return false;
     }
     if (reader.remaining() != 0) {

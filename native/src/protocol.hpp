@@ -130,9 +130,14 @@ private:
 bool send_frame(TlsConnection& connection, const Frame& frame, std::string& error);
 bool recv_frame(TlsConnection& connection, Frame& frame, std::string& error);
 
-std::vector<uint8_t> encode_hello(const std::string& name, const std::string& platform);
+// The optional link token is appended after the platform string. Older peers
+// reject the trailing field, so only QR-created temporary links set it; a host
+// that expects a token refuses a hello without one.
+std::vector<uint8_t> encode_hello(const std::string& name, const std::string& platform,
+                                  const std::string& link_token = {});
 bool decode_hello(const std::vector<uint8_t>& payload,
-                  std::string& name, std::string& platform, std::string& error);
+                  std::string& name, std::string& platform, std::string& link_token,
+                  std::string& error);
 
 std::vector<uint8_t> encode_offer(const std::vector<ManifestFile>& files, uint64_t total_bytes);
 bool decode_offer(const std::vector<uint8_t>& payload,

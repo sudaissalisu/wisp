@@ -92,6 +92,17 @@ WISP_API int wisp_engine_add_peer(wisp_engine* engine,
                                   int port,
                                   const char* fingerprint);
 
+/* QR temporary link. The sender presents link_token in its Hello frame. The
+   host sets expected_token; the first matching Hello binds it to that peer
+   certificate, and only that peer may reuse it. Pass "" or NULL to clear. */
+WISP_API int wisp_engine_set_link_token(wisp_engine* engine, const char* link_token);
+WISP_API int wisp_engine_set_expected_link_token(wisp_engine* engine,
+                                                 const char* expected_token);
+
+/* Optional source address for outgoing transfer sockets. The Android hotspot
+   host calls this with its soft-AP IPv4 address so replies use that interface. */
+WISP_API int wisp_engine_set_bind_address(wisp_engine* engine, const char* address);
+
 /* Copies a JSON array of currently known peers into out. */
 WISP_API int wisp_engine_get_peers(wisp_engine* engine, char* out, size_t out_size);
 

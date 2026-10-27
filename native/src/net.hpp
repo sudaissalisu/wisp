@@ -33,7 +33,11 @@ private:
     intptr_t fd_ = -1;
 };
 
-bool connect_tcp(const std::string& host, int port, int timeout_ms, Socket& out, std::string& error);
+// local_address optionally binds the client socket source address. The Android
+// hotspot host uses this to force outgoing transfers over the soft-AP interface
+// because LocalOnlyHotspot is not exposed as a ConnectivityManager Network.
+bool connect_tcp(const std::string& host, int port, int timeout_ms, Socket& out,
+                 std::string& error, const std::string& local_address = {});
 
 class TcpListener {
 public:

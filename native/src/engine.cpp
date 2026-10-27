@@ -67,10 +67,25 @@ static std::string state_progress_json(const std::string& transfer_id,
     return json.str();
 }
 
+static uint64_t monotonic_ms() {
+    using namespace std::chrono;
+    return static_cast<uint64_t>(
+        duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count());
+}
+
 static double current_speed(uint64_t bytes, uint64_t started_ms) {
     const uint64_t elapsed = now_ms() > started_ms ? now_ms() - started_ms : 0;
     if (elapsed == 0) return 0;
     return static_cast<double>(bytes) * 1000.0 / static_cast<double>(elapsed);
+}
+
+static bool secure_token_equals(const std::string& expected, const std::string& presented) {
+    if (expected.empty() || expected.size() != presented.size()) return false;
+    unsigned char diff = 0;
+    for (size_t i = 0; i < expected.size(); ++i) {
+        diff |= static_cast<unsigned char>(expected[i] ^ presented[i]);
+    }
+    return diff == 0;
 }
 
 Engine::Engine(EngineConfig config, EventCallback event_callback, LogCallback log_callback)
@@ -329,6 +344,58 @@ bool Engine::add_peer(const PeerInfo& peer, std::string& error) {
     return true;
 }
 
+void Engine::set_link_token(const std::string& token) {
+    std::lock_guard<std::mutex> lock(link_token_mutex_);
+    link_token_ = token;
+}
+
+void Engine::set_expected_link_token(const std::string& token) {
+    std::lock_guard<std::mutex> lock(link_token_mutex_);
+    expected_link_token_ = token;
+    bound_link_token_.clear();
+    bound_link_fingerprint_.clear();
+}
+
+std::string Engine::link_token() const {
+    std::lock_guard<std::mutex> lock(link_token_mutex_);
+    return link_token_;
+}
+
+std::string Engine::expected_link_token() const {
+    std::lock_guard<std::mutex> lock(link_token_mutex_);
+    return expected_link_token_;
+}
+
+bool Engine::consume_expected_link_token(const std::string& presented,
+                                         const std::string& peer_fingerprint) {
+    std::lock_guard<std::mutex> lock(link_token_mutex_);
+    if (!expected_link_token_.empty()) {
+        if (!secure_token_equals(expected_link_token_, presented)) return false;
+        // One QR token, one peer identity. Keep the token so the same guest can
+        // start additional transfers over the still-active temporary link.
+        expected_link_token_.clear();
+        bound_link_token_ = presented;
+        bound_link_fingerprint_ = peer_fingerprint;
+        return true;
+    }
+    if (!bound_link_token_.empty()) {
+        return secure_token_equals(bound_link_token_, presented) &&
+               !bound_link_fingerprint_.empty() &&
+               bound_link_fingerprint_ == peer_fingerprint;
+    }
+    return true;
+}
+
+void Engine::set_bind_address(const std::string& address) {
+    std::lock_guard<std::mutex> lock(bind_mutex_);
+    bind_address_ = address;
+}
+
+std::string Engine::bind_address() const {
+    std::lock_guard<std::mutex> lock(bind_mutex_);
+    return bind_address_;
+}
+
 std::string Engine::send_paths(const std::string& peer_id,
                                const std::vector<std::string>& paths,
                                std::string& error) {
@@ -420,35 +487,68 @@ bool Engine::cancel(const std::string& transfer_id, std::string& error) {
 }
 
 void Engine::incoming_progress(const std::shared_ptr<IncomingSession>& session, bool force) {
-    const uint64_t now = now_ms();
-    uint64_t last = session->last_progress_ms.load(std::memory_order_relaxed);
-    if (!force && now - last < 250) return;
-    if (!session->last_progress_ms.compare_exchange_strong(last, now) && !force) return;
+    const uint64_t now = monotonic_ms();
+    const uint64_t bytes_done = session->bytes_done.load();
+    // Always publish the first non-zero byte count, even on a transfer that
+    // completes inside the 250 ms throttle window. Otherwise the UI can sit at
+    // 0% until the completion event.
+    const bool first_data = bytes_done > 0 &&
+        !session->data_progress_started.exchange(true);
+    if (!force && !first_data) {
+        uint64_t last = session->last_progress_ms.load(std::memory_order_relaxed);
+        if (now < last || now - last < 250) return;
+        if (!session->last_progress_ms.compare_exchange_strong(last, now)) return;
+    } else {
+        session->last_progress_ms.store(now, std::memory_order_relaxed);
+    }
 
     PeerInfo peer;
     peer.id = session->peer_id;
     peer.name = session->peer_name;
     peer.fingerprint = session->peer_fingerprint;
-    const double speed = current_speed(session->bytes_done.load(), session->started_ms);
+    const double speed = current_speed(bytes_done, session->started_ms);
     emit(WISP_EVT_PROGRESS,
          state_progress_json(session->transfer_id_hex, "receive", peer, "receiving",
-                             session->bytes_done.load(), session->total_bytes,
+                             bytes_done, session->total_bytes,
                              session->files_done.load(),
                              static_cast<uint32_t>(session->files.size()), speed));
+
+    // Instrumentation for the Android progress meter. Intermediate byte counts
+    // must reach the UI; log them at the start, every five seconds, and at end.
+    uint64_t last_log = session->last_progress_log_ms.load(std::memory_order_relaxed);
+    if (force || last_log == 0 || now >= last_log + 5000) {
+        session->last_progress_log_ms.store(now, std::memory_order_relaxed);
+        log(WISP_LOG_DEBUG, "receive progress " + std::to_string(bytes_done) + "/" +
+                                std::to_string(session->total_bytes) + " bytes");
+    }
 }
 
 void Engine::outgoing_progress(const std::shared_ptr<OutgoingSession>& session, bool force) {
-    const uint64_t now = now_ms();
-    uint64_t last = session->last_progress_ms.load(std::memory_order_relaxed);
-    if (!force && now - last < 250) return;
-    if (!session->last_progress_ms.compare_exchange_strong(last, now) && !force) return;
+    const uint64_t now = monotonic_ms();
+    const uint64_t bytes_done = session->bytes_done.load();
+    const bool first_data = bytes_done > 0 &&
+        !session->data_progress_started.exchange(true);
+    if (!force && !first_data) {
+        uint64_t last = session->last_progress_ms.load(std::memory_order_relaxed);
+        if (now < last || now - last < 250) return;
+        if (!session->last_progress_ms.compare_exchange_strong(last, now)) return;
+    } else {
+        session->last_progress_ms.store(now, std::memory_order_relaxed);
+    }
 
-    const double speed = current_speed(session->bytes_done.load(), session->started_ms);
+    const double speed = current_speed(bytes_done, session->started_ms);
     emit(WISP_EVT_PROGRESS,
          state_progress_json(session->transfer_id_hex, "send", session->peer, "sending",
-                             session->bytes_done.load(), session->total_bytes,
+                             bytes_done, session->total_bytes,
                              session->files_done.load(),
                              static_cast<uint32_t>(session->files.size()), speed));
+
+    uint64_t last_log = session->last_progress_log_ms.load(std::memory_order_relaxed);
+    if (force || last_log == 0 || now >= last_log + 5000) {
+        session->last_progress_log_ms.store(now, std::memory_order_relaxed);
+        log(WISP_LOG_DEBUG, "send progress " + std::to_string(bytes_done) + "/" +
+                                std::to_string(session->total_bytes) + " bytes");
+    }
 }
 
 
