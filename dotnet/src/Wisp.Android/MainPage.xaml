@@ -97,6 +97,49 @@
                         </VerticalStackLayout>
                     </Border>
 
+                    <!-- Temporary QR connection -->
+                    <Border Style="{StaticResource SurfaceCard}" Padding="16">
+                        <VerticalStackLayout Spacing="11">
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                                <Border WidthRequest="40" HeightRequest="40" BackgroundColor="{StaticResource MintSoft}"
+                                        StrokeThickness="0" VerticalOptions="Center">
+                                    <Border.StrokeShape>
+                                        <RoundRectangle CornerRadius="13" />
+                                    </Border.StrokeShape>
+                                    <Label FontFamily="MaterialIcons-Regular" Text="&#xE00B;" FontSize="21"
+                                           TextColor="{StaticResource Mint}" HorizontalOptions="Center"
+                                           VerticalOptions="Center" />
+                                </Border>
+                                <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                    <Label Text="Temporary link" FontFamily="OpenSansSemibold" FontSize="14.5"
+                                           TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                                    <Label x:Name="LinkCardHintLabel"
+                                           Text="No shared Wi-Fi? Make a private hotspot and scan a QR code."
+                                           Style="{StaticResource TinyLabel}" />
+                                </VerticalStackLayout>
+                                <Label x:Name="LinkActiveBadge" Grid.Column="2" Text="LIVE" IsVisible="False"
+                                       FontFamily="OpenSansSemibold" FontSize="9.5" TextColor="{StaticResource OnAccent}"
+                                       BackgroundColor="{StaticResource Mint}" Padding="7,4"
+                                       VerticalOptions="Center" />
+                            </Grid>
+                            <Label x:Name="LinkSummaryLabel" IsVisible="False" Style="{StaticResource TinyLabel}"
+                                   TextColor="{StaticResource Mint}" />
+                            <Grid x:Name="LinkIdleActions" ColumnDefinitions="*,*" ColumnSpacing="8">
+                                <Button Text="Create connection" Style="{StaticResource PrimaryButton}"
+                                        HeightRequest="42" FontSize="13" Clicked="CreateTemporaryLink_Click" />
+                                <Button Grid.Column="1" Text="Scan code" Style="{StaticResource SecondaryButton}"
+                                        HeightRequest="42" FontSize="13" Clicked="ScanTemporaryLink_Click" />
+                            </Grid>
+                            <Grid x:Name="LinkActiveActions" ColumnDefinitions="*,*" ColumnSpacing="8"
+                                  IsVisible="False">
+                                <Button Text="Open link" Style="{StaticResource PrimaryButton}"
+                                        HeightRequest="42" FontSize="13" Clicked="OpenTemporaryLink_Click" />
+                                <Button Grid.Column="1" Text="Disconnect" Style="{StaticResource SecondaryButton}"
+                                        HeightRequest="42" FontSize="13" Clicked="DisconnectTemporaryLink_Click" />
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+
                     <Grid ColumnDefinitions="*,Auto">
                         <Label Text="Nearby devices" Style="{StaticResource SectionLabel}" VerticalOptions="Center" />
                         <Label x:Name="PeerCountLabel" Grid.Column="1" Text="Looking around…"
@@ -152,10 +195,16 @@
                         <VerticalStackLayout Spacing="10" HorizontalOptions="Center" Padding="0,10">
                             <Label FontFamily="MaterialIcons-Regular" Text="&#xE1B1;" FontSize="38"
                                    TextColor="{StaticResource Mint}" HorizontalTextAlignment="Center" />
-                            <Label Text="No devices visible yet" Style="{StaticResource SectionLabel}"
+                            <Label Text="No devices on this Wi-Fi" Style="{StaticResource SectionLabel}"
                                    HorizontalTextAlignment="Center" />
-                            <Label Text="Keep Wisp open on the other device and make sure both are on the same Wi-Fi."
+                            <Label Text="Keep Wisp open on the other device, or connect directly with a QR code — no shared network needed."
                                    Style="{StaticResource MutedLabel}" HorizontalTextAlignment="Center" />
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,6,0,0">
+                                <Button Text="Scan QR code" Style="{StaticResource PrimaryButton}"
+                                        HeightRequest="44" FontSize="13" Clicked="ScanTemporaryLink_Click" />
+                                <Button Grid.Column="1" Text="Create link" Style="{StaticResource SecondaryButton}"
+                                        HeightRequest="44" FontSize="13" Clicked="CreateTemporaryLink_Click" />
+                            </Grid>
                         </VerticalStackLayout>
                     </Border>
 
@@ -569,7 +618,7 @@
                     <Border x:Name="PermissionsCard" Style="{StaticResource SurfaceCard}">
                         <VerticalStackLayout Spacing="9">
                             <Label Text="Permissions &amp; background" Style="{StaticResource SectionLabel}" />
-                            <Label Text="Wisp uses notifications, nearby Wi-Fi/local network access, and a foreground service so transfers can continue while the screen is off."
+                            <Label Text="Wisp uses notifications, nearby Wi-Fi/local network access, the camera (only when scanning a temporary-link QR code), and a foreground service so transfers can continue while the screen is off."
                                    Style="{StaticResource MutedLabel}" />
                             <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
                                 <Button Text="Grant permissions" Style="{StaticResource PrimaryButton}"
@@ -582,11 +631,21 @@
 
                     <!-- About -->
                     <Border x:Name="AboutCard" Style="{StaticResource SurfaceCard}">
-                        <VerticalStackLayout Spacing="7">
+                        <VerticalStackLayout Spacing="8">
                             <Label Text="About" Style="{StaticResource SectionLabel}" />
-                            <Label x:Name="AboutLabel" Text="Wisp" Style="{StaticResource MutedLabel}" />
-                            <Label Text="Local-first transfer. No account, no cloud relay, no analytics. TLS 1.3 in transit and SHA-256 verification for every chunk."
+                            <Label x:Name="AboutLabel" Text="Wisp · A project by SSM Limited"
+                                   Style="{StaticResource MutedLabel}" />
+                            <Label Text="Wisp is free and open-source software. Files travel directly between your devices — no account, no cloud relay, no analytics. TLS 1.3 in transit and SHA-256 verification for every chunk."
                                    Style="{StaticResource TinyLabel}" />
+                            <Label x:Name="AboutVersionLabel" Text="Version —" Style="{StaticResource TinyLabel}" />
+                            <Label Text="© 2026 SSM Limited. Released under the MIT License."
+                                   Style="{StaticResource TinyLabel}" />
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,4,0,0">
+                                <Button Text="Source code" Style="{StaticResource SecondaryButton}"
+                                        HeightRequest="42" FontSize="13" Clicked="OpenSourceCode_Click" />
+                                <Button Grid.Column="1" Text="License" Style="{StaticResource GhostButton}"
+                                        HeightRequest="42" FontSize="13" Clicked="OpenLicense_Click" />
+                            </Grid>
                             <Label Text="Tip: add the Wisp widget to your home screen for transfer status at a glance."
                                    Style="{StaticResource TinyLabel}" />
                         </VerticalStackLayout>
@@ -775,6 +834,12 @@
                         <Label Text="Scanning for nearby devices…" Style="{StaticResource MutedLabel}"
                                VerticalOptions="Center" />
                     </HorizontalStackLayout>
+                    <VerticalStackLayout x:Name="ShareQrBlock" Spacing="7" IsVisible="False">
+                        <Button Text="Scan a QR code" Style="{StaticResource PrimaryButton}"
+                                HeightRequest="44" FontSize="13" Clicked="ShareQrButton_Click" />
+                        <Label Text="On different Wi-Fi? Scan the other phone's temporary-link code and Wisp sends these files as soon as you connect."
+                               Style="{StaticResource TinyLabel}" HorizontalTextAlignment="Center" />
+                    </VerticalStackLayout>
                     <Button Text="Cancel" Style="{StaticResource GhostButton}" Clicked="CloseShareSheet_Click" />
                 </VerticalStackLayout>
             </Border>
@@ -842,6 +907,123 @@
                        VerticalOptions="Center" />
             </Grid>
         </Border>
+
+        <!-- Temporary QR link sheet -->
+        <Grid x:Name="LinkOverlay" Grid.RowSpan="3" IsVisible="False"
+              BackgroundColor="#C40B0E12" ZIndex="19">
+            <Border VerticalOptions="End" Margin="14,0,14,18" Padding="20"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}"
+                    Stroke="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}"
+                    StrokeThickness="1" StrokeShape="RoundRectangle 30">
+                <VerticalStackLayout Spacing="14">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <VerticalStackLayout Spacing="2">
+                            <Label Text="Temporary link" Style="{StaticResource SectionLabel}" />
+                            <Label x:Name="LinkSubtitleLabel" Text="A private Wi-Fi link between two phones."
+                                   Style="{StaticResource MutedLabel}" />
+                        </VerticalStackLayout>
+                        <Button Grid.Column="1" Text="&#xE5CD;" FontFamily="MaterialIcons-Regular"
+                                Style="{StaticResource GhostButton}" WidthRequest="42" Padding="0"
+                                Clicked="CloseTemporaryLink_Click" AutomationProperties.Name="Close" />
+                    </Grid>
+
+                    <!-- Host: QR code -->
+                    <VerticalStackLayout x:Name="LinkHostPanel" Spacing="12" IsVisible="False">
+                        <Border BackgroundColor="White" Padding="10" Stroke="{StaticResource MintBrush}"
+                                StrokeThickness="1" StrokeShape="RoundRectangle 20"
+                                HorizontalOptions="Center">
+                            <Image x:Name="LinkQrImage" WidthRequest="232" HeightRequest="232"
+                                   Aspect="AspectFit" />
+                        </Border>
+                        <Border Style="{StaticResource InnerCard}" Padding="13,11">
+                            <VerticalStackLayout Spacing="5">
+                                <Label Text="JOIN THIS WI-FI" Style="{StaticResource TinyLabel}"
+                                       FontSize="9.5" TextColor="{StaticResource Mint}" />
+                                <Label x:Name="LinkSsidLabel" Text="—" FontFamily="OpenSansSemibold" FontSize="14"
+                                       TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                                <Label x:Name="LinkPassphraseLabel" Text="—" Style="{StaticResource TinyLabel}" />
+                                <Label x:Name="LinkEndpointLabel" Text="" Style="{StaticResource TinyLabel}" />
+                            </VerticalStackLayout>
+                        </Border>
+                        <Label Text="On the other phone, tap Scan code and approve the Wi-Fi prompt. The code binds to the first phone that joins and expires automatically."
+                               Style="{StaticResource TinyLabel}" />
+                        <Label x:Name="LinkExpiryLabel" Text="" Style="{StaticResource TinyLabel}"
+                               TextColor="{StaticResource Mint}" />
+                        <Label x:Name="LinkHostHintLabel" Text="Waiting for the other phone to scan this code…"
+                               Style="{StaticResource TinyLabel}" TextColor="{StaticResource Mint}" />
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                            <Button Text="Send files" Style="{StaticResource PrimaryButton}"
+                                    Clicked="LinkSendFiles_Click" />
+                            <Button Grid.Column="1" Text="Disconnect" Style="{StaticResource SecondaryButton}"
+                                    Clicked="DisconnectTemporaryLink_Click" />
+                        </Grid>
+                    </VerticalStackLayout>
+
+                    <!-- Scanner -->
+                    <VerticalStackLayout x:Name="LinkScanPanel" Spacing="12" IsVisible="False">
+                        <Border HeightRequest="330" Stroke="{StaticResource MintBrush}" StrokeThickness="1"
+                                StrokeShape="RoundRectangle 22"
+                                BackgroundColor="#000000">
+                            <Grid IsClippedToBounds="True">
+                                <!-- The camera view is created only when scanning, so
+                                     app startup never connects CameraX or prompts for
+                                     camera permission. -->
+                                <Grid x:Name="ScannerHost" />
+                                <Border VerticalOptions="End" Margin="14" Padding="12,9"
+                                        BackgroundColor="#99000000" StrokeThickness="0"
+                                        StrokeShape="RoundRectangle 14">
+                                    <Label Text="Point the camera at the other phone's QR code"
+                                           FontSize="11.5" TextColor="White"
+                                           HorizontalTextAlignment="Center" />
+                                </Border>
+                            </Grid>
+                        </Border>
+                        <HorizontalStackLayout Spacing="9" HorizontalOptions="Center">
+                            <ActivityIndicator x:Name="LinkScanSpinner" IsRunning="False"
+                                               Color="{StaticResource Mint}" WidthRequest="18" HeightRequest="18" />
+                            <Label x:Name="LinkScanStatusLabel" Text="Starting camera…"
+                                   Style="{StaticResource TinyLabel}" VerticalOptions="Center" />
+                        </HorizontalStackLayout>
+                        <Button Text="Cancel" Style="{StaticResource GhostButton}"
+                                Clicked="CloseTemporaryLink_Click" />
+                    </VerticalStackLayout>
+
+                    <!-- Joining -->
+                    <VerticalStackLayout x:Name="LinkConnectingPanel" Spacing="14" IsVisible="False"
+                                         Padding="0,12">
+                        <ActivityIndicator IsRunning="True" Color="{StaticResource Mint}"
+                                           WidthRequest="34" HeightRequest="34"
+                                           HorizontalOptions="Center" />
+                        <Label x:Name="LinkConnectingLabel" Text="Joining the temporary Wi-Fi…"
+                               Style="{StaticResource MutedLabel}" HorizontalTextAlignment="Center" />
+                        <Label Text="Approve the Wi-Fi prompt from Android if it appears."
+                               Style="{StaticResource TinyLabel}" HorizontalTextAlignment="Center" />
+                    </VerticalStackLayout>
+
+                    <!-- Scanner connected -->
+                    <VerticalStackLayout x:Name="LinkConnectedPanel" Spacing="12" IsVisible="False">
+                        <Border Style="{StaticResource InnerCard}" Padding="14,12">
+                            <VerticalStackLayout Spacing="4">
+                                <Label Text="CONNECTED" Style="{StaticResource TinyLabel}" FontSize="9.5"
+                                       TextColor="{StaticResource Mint}" />
+                                <Label x:Name="LinkConnectedLabel" Text="Ready to send."
+                                       FontFamily="OpenSansSemibold" FontSize="14"
+                                       TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                                <Label x:Name="LinkConnectedEndpointLabel" Text="" Style="{StaticResource TinyLabel}" />
+                            </VerticalStackLayout>
+                        </Border>
+                        <Label Text="This link bypasses normal discovery. Disconnect when you are done to return to your home Wi-Fi."
+                               Style="{StaticResource TinyLabel}" />
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                            <Button Text="Send files" Style="{StaticResource PrimaryButton}"
+                                    Clicked="LinkSendFiles_Click" />
+                            <Button Grid.Column="1" Text="Disconnect" Style="{StaticResource SecondaryButton}"
+                                    Clicked="DisconnectTemporaryLink_Click" />
+                        </Grid>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
 
         <!-- App biometric lock -->
         <Grid x:Name="LockOverlay" Grid.RowSpan="3" IsVisible="False"

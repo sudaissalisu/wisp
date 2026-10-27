@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Security.Cryptography;
 using Android.Content;
 using Android.Content.PM;
 using Android.Net;
@@ -9,6 +10,8 @@ using AndroidX.Core.Content;
 using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.ApplicationModel.DataTransfer;
 using Wisp.Core;
+using ZXing.Net.Maui;
+using ZXing.Net.Maui.Controls;
 using AndroidApplication = Android.App.Application;
 using SystemEnvironment = System.Environment;
 using MauiColor = Microsoft.Maui.Graphics.Color;
@@ -27,6 +30,8 @@ public partial class MainPage : ContentPage
     private const string IconError = "\uE001";
     private const string IconInfo = "\uE88F";
 
+    private static readonly TimeSpan TemporaryLinkLifetime = TimeSpan.FromMinutes(10);
+
     private readonly Dictionary<string, PeerItem> _peerById = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, TransferItem> _transferById = new(StringComparer.OrdinalIgnoreCase);
     private readonly SettingsStore _settingsStore;
@@ -34,13 +39,28 @@ public partial class MainPage : ContentPage
     private readonly HistoryStore _historyStore;
     private readonly string _identityDirectory;
     private readonly ActivityGaugeDrawable _gaugeDrawable = new();
+    private readonly SemaphoreSlim _engineGate = new(1, 1);
     private AppSettings _settings;
     private WispEngine? _engine;
     private WifiManager.MulticastLock? _multicastLock;
     private Network? _boundWifiNetwork;
     private IDispatcherTimer? _toastTimer;
     private IDispatcherTimer? _gaugeTimer;
+    private IDispatcherTimer? _linkExpiryTimer;
     private CancellationTokenSource? _pulseCts;
+    private TemporaryHotspot? _temporaryHotspot;
+    private TemporaryWifiLink? _temporaryWifiLink;
+    private CameraBarcodeReaderView? _linkScanner;
+    private QrLinkPayload? _activeLink;
+    private PeerInfo? _linkPeer;
+    private string _temporaryLinkRole = "";
+    private bool _temporaryLinkActive;
+    private bool _temporaryLinkBusy;
+    private bool _temporaryLinkClosing;
+    private bool _linkPeerJoined;
+    private string[]? _linkSendAfterConnect;
+    private bool _scannerHandling;
+    private bool _scanPending;
     private TransferOffer? _pendingOffer;
     private bool _started;
     private bool _closing;
@@ -56,6 +76,8 @@ public partial class MainPage : ContentPage
     private bool _appVisible;
     private int _lastPeerCount;
     private long _lastProgressNotificationMs;
+    private long _lastProgressLogMs;
+    private int _progressEventCount;
     private long _lastBytesTotal;
     private long _lastBytesDone;
     private int _lastFilesTotal;
@@ -88,7 +110,9 @@ public partial class MainPage : ContentPage
         BiometricUnlockSwitch.IsToggled = _settings.BiometricUnlock;
         UpdateThemePills();
         ShowSettingsMenu();
-        AboutLabel.Text = $"Wisp {WispEngine.Version} · protocol 1 · local only";
+        AboutLabel.Text = "Wisp · A project by SSM Limited";
+        AboutVersionLabel.Text =
+            $"Version {AppInfo.Current.VersionString} · Android {Build.VERSION.Release}";
         OnboardingOverlay.IsVisible = !_settings.Onboarded;
 
         HeaderGauge.Drawable = _gaugeDrawable;
@@ -110,6 +134,13 @@ public partial class MainPage : ContentPage
     {
         base.OnDisappearing();
         _appVisible = false;
+        // Release the camera while the app is not visible; the temporary link
+        // itself (hotspot or joined network) stays up for in-flight transfers.
+        if (LinkOverlay.IsVisible && LinkScanPanel.IsVisible)
+        {
+            _scanPending = true;
+            ReleaseScanner();
+        }
     }
 
     protected override async void OnAppearing()
@@ -118,6 +149,11 @@ public partial class MainPage : ContentPage
         _appVisible = true;
         StartPresencePulse();
         AndroidTheme.Apply(Application.Current?.RequestedTheme == AppTheme.Light);
+        if (_scanPending && LinkOverlay.IsVisible && LinkScanPanel.IsVisible && !_temporaryLinkActive)
+        {
+            _scanPending = false;
+            StartScannerDetection();
+        }
         if (!_settings.Onboarded)
         {
             OnboardingOverlay.IsVisible = true;
@@ -137,6 +173,37 @@ public partial class MainPage : ContentPage
         await ProcessAppActionsAsync();
     }
 
+    protected override bool OnBackButtonPressed()
+    {
+        // Android back dismisses the topmost sheet instead of leaving Wisp.
+        if (LinkOverlay.IsVisible)
+        {
+            CloseTemporaryLink_Click(this, EventArgs.Empty);
+            return true;
+        }
+        if (ShareSheetOverlay.IsVisible)
+        {
+            CloseShareSheet_Click(this, EventArgs.Empty);
+            return true;
+        }
+        if (TransferOverlay.IsVisible)
+        {
+            MinimizeTransfer_Click(this, EventArgs.Empty);
+            return true;
+        }
+        if (OfferOverlay.IsVisible)
+        {
+            _ = HideOfferAsync();
+            return true;
+        }
+        if (SettingsDetailHeader.IsVisible)
+        {
+            ShowSettingsMenu();
+            return true;
+        }
+        return base.OnBackButtonPressed();
+    }
+
     public void Shutdown()
     {
         if (_closing) return;
@@ -145,6 +212,7 @@ public partial class MainPage : ContentPage
         AppActionInbox.Changed -= OnAppActionChanged;
         StopPresencePulse();
         StopGaugeTimer();
+        StopTemporaryLinkResources();
         var engine = _engine;
         _engine = null;
         if (engine is not null)
@@ -160,61 +228,79 @@ public partial class MainPage : ContentPage
 
     // ── Engine lifecycle ──────────────────────────────────────────────
 
-    private async Task StartEngineAsync()
+    private async Task<bool> StartEngineAsync(bool bindWifi = true, bool discovery = true,
+        bool announce = true, bool clearBindings = true)
     {
-        var old = _engine;
-        _engine = null;
-        if (old is not null)
-        {
-            Unsubscribe(old);
-            await Task.Run(old.Dispose);
-        }
-        lock (_peerById)
-        {
-            _peerById.Clear();
-            Peers.Clear();
-        }
-        _lastPeerCount = 0;
-        UpdatePeerUi();
-        SetHeaderStatus("starting…", false);
-        PresenceStatusLabel.Text = "Connecting…";
-        UpdateWidget("idle", "Wisp", "Starting…", -1);
-
-        AndroidPermissions.RequestAll();
-        BindToWifiNetwork();
-        AcquireMulticastLock();
-
-        var engine = new WispEngine();
-        _engine = engine;
-        Subscribe(engine);
+        await _engineGate.WaitAsync();
         try
         {
-            await Task.Run(() => engine.Start(new WispConfig
-            {
-                Name = _settings.DeviceName,
-                SaveDirectory = _settings.SaveDirectory,
-                IdentityDirectory = _identityDirectory,
-                DiscoveryPort = 47778,
-                DataChannels = 4
-            }));
-            UpdateIdentityUi();
-            SetHeaderStatus("visible", true);
-            PresenceStatusLabel.Text = "Visible on this Wi-Fi";
-            PresenceDot.Color = MintColor;
-            StartForegroundService("Visible nearby · transfers keep running");
-            ShowToast("You’re live", IconCheck);
-            UpdateWidget("idle", _settings.DeviceName, "Ready nearby", -1);
-            await ProcessAppActionsAsync();
-        }
-        catch (Exception exception)
-        {
+            if (_closing) return false;
+            var old = _engine;
             _engine = null;
-            Unsubscribe(engine);
-            engine.Dispose();
-            SetHeaderStatus("offline", false);
-            PresenceStatusLabel.Text = "Engine offline";
-            ShowToast($"Could not start: {exception.Message}", IconError, error: true, durationSeconds: 6);
-            UpdateWidget("offline", "Wisp", "Offline", -1);
+            if (old is not null)
+            {
+                Unsubscribe(old);
+                await Task.Run(old.Dispose);
+            }
+            lock (_peerById)
+            {
+                _peerById.Clear();
+                Peers.Clear();
+            }
+            _lastPeerCount = 0;
+            UpdatePeerUi();
+            SetHeaderStatus("starting…", false);
+            PresenceStatusLabel.Text = "Connecting…";
+            UpdateWidget("idle", "Wisp", "Starting…", -1);
+
+            AndroidPermissions.RequestAll();
+            if (bindWifi) BindToWifiNetwork();
+            else if (clearBindings) UnbindWifiNetwork();
+            AcquireMulticastLock();
+
+            var engine = new WispEngine();
+            _engine = engine;
+            Subscribe(engine);
+            try
+            {
+                await Task.Run(() => engine.Start(new WispConfig
+                {
+                    Name = _settings.DeviceName,
+                    SaveDirectory = _settings.SaveDirectory,
+                    IdentityDirectory = _identityDirectory,
+                    DiscoveryPort = discovery ? 47778 : 0,
+                    DataChannels = 4
+                }));
+                UpdateIdentityUi();
+                SetHeaderStatus("visible", true);
+                PresenceStatusLabel.Text = _temporaryLinkActive
+                    ? "Private link active"
+                    : "Visible on this Wi-Fi";
+                PresenceDot.Color = MintColor;
+                StartForegroundService(_temporaryLinkActive
+                    ? "Temporary link active · transfer safely"
+                    : "Visible nearby · transfers keep running");
+                if (announce) ShowToast("You’re live", IconCheck);
+                UpdateWidget("idle", _settings.DeviceName,
+                    _temporaryLinkActive ? "Temporary link" : "Ready nearby", -1);
+                await ProcessAppActionsAsync();
+                return true;
+            }
+            catch (Exception exception)
+            {
+                _engine = null;
+                Unsubscribe(engine);
+                engine.Dispose();
+                SetHeaderStatus("offline", false);
+                PresenceStatusLabel.Text = "Engine offline";
+                ShowToast($"Could not start: {exception.Message}", IconError, error: true, durationSeconds: 6);
+                UpdateWidget("offline", "Wisp", "Offline", -1);
+                return false;
+            }
+        }
+        finally
+        {
+            _engineGate.Release();
         }
     }
 
@@ -261,7 +347,22 @@ public partial class MainPage : ContentPage
     private void OnOfferReceived(object? sender, TransferOffer offer)
     {
         if (!ReferenceEquals(sender, _engine)) return;
-        MainThread.BeginInvokeOnMainThread(async () => await HandleOfferAsync(offer));
+        MainThread.BeginInvokeOnMainThread(async () =>
+        {
+            if (_temporaryLinkActive && _temporaryLinkRole == "host")
+            {
+                _linkPeerJoined = true;
+                _linkPeer = _engine?.Peers.FirstOrDefault(peer =>
+                    peer.Id.Equals(offer.PeerId, StringComparison.OrdinalIgnoreCase)) ?? _linkPeer;
+                StopLinkExpiryTimer();
+                LinkSubtitleLabel.Text = $"{offer.PeerName} joined your temporary link.";
+                LinkSummaryLabel.Text = $"Connected · receiving from {offer.PeerName}";
+                LinkExpiryLabel.Text = "Link is in use until you disconnect.";
+                LinkHostHintLabel.Text = $"{offer.PeerName} is connected. You can send files either way.";
+                UpdateLinkCard();
+            }
+            await HandleOfferAsync(offer);
+        });
     }
 
     private void OnPairing(object? sender, PairingInfo pairing)
@@ -281,7 +382,17 @@ public partial class MainPage : ContentPage
             _lastBytesTotal = progress.BytesTotal;
             _lastBytesDone = progress.BytesDone;
             _lastFilesTotal = progress.FilesTotal;
+            // Keep the live transfer sheet in step with intermediate progress.
+            // Without this call the sheet only changed when Complete() ran, so
+            // it appeared stuck at 0% until the transfer finished.
+            UpdateTransferOverlay(progress);
             UpdateTransferUi();
+            InstrumentProgress(progress);
+            if (_temporaryLinkActive && _linkExpiryTimer is not null)
+            {
+                StopLinkExpiryTimer();
+                LinkExpiryLabel.Text = "Link is in use until you disconnect.";
+            }
             StartForegroundService(item.IsIncoming
                 ? $"Receiving from {item.PeerName}"
                 : $"Sending to {item.PeerName}");
@@ -301,6 +412,22 @@ public partial class MainPage : ContentPage
                 $"{progress.FilesDone}/{progress.FilesTotal} files · {progress.SpeedText}",
                 (int)Math.Round(progress.Fraction * 100));
         });
+    }
+
+    private void InstrumentProgress(TransferProgress progress)
+    {
+        _progressEventCount++;
+        var now = SystemEnvironment.TickCount64;
+        if (_lastProgressLogMs != 0 && now - _lastProgressLogMs < 1500) return;
+        _lastProgressLogMs = now;
+        var itemProgress = _transferById.TryGetValue(progress.TransferId, out var transfer)
+            ? transfer.Progress
+            : 0;
+        System.Diagnostics.Debug.WriteLine(
+            $"[wisp:ui] progress #{_progressEventCount} {progress.TransferId} " +
+            $"{progress.Direction} {progress.BytesDone}/{progress.BytesTotal} " +
+            $"({progress.Fraction * 100:0.0}%) item={itemProgress:0.000} " +
+            $"sheet={TransferProgressBar.Progress:0.000}");
     }
 
     private void OnCompleted(object? sender, TransferCompletion completion)
@@ -448,13 +575,37 @@ public partial class MainPage : ContentPage
         {
             PresenceNameLabel.Text = self.Name;
             PresenceInitials.Text = AndroidPalette.InitialsOf(self.Name);
-            PresenceStatusLabel.Text = count == 0 ? "Visible on this Wi-Fi" : $"Visible · {count} nearby";
-            PresenceSubLabel.Text = $"Visible on this Wi-Fi · port {self.Port}";
+            PresenceStatusLabel.Text = _temporaryLinkActive
+                ? "Private link active"
+                : count == 0 ? "Visible on this Wi-Fi" : $"Visible · {count} nearby";
+            PresenceSubLabel.Text = _temporaryLinkActive
+                ? $"Temporary link · port {self.Port}"
+                : $"Visible on this Wi-Fi · port {self.Port}";
             PeerIdLabel.Text = self.Id;
             FingerprintLabel.Text = self.Fingerprint;
         }
         UpdateHeaderGauge();
         UpdateShareSheetState();
+        // While hosting, the guest appears through LAN discovery on the
+        // hotspot. Only trust a peer on the hotspot subnet, and only when no
+        // offer has already identified the guest.
+        if (_temporaryLinkActive && _temporaryLinkRole == "host" && !_linkPeerJoined &&
+            _activeLink is { } activeLink && activeLink.Host.LastIndexOf('.') > 0)
+        {
+            var subnet = activeLink.Host[..(activeLink.Host.LastIndexOf('.') + 1)];
+            var candidate = Peers.Select(peer => peer.Info).FirstOrDefault(peer =>
+                peer.Online && peer.Host.StartsWith(subnet, StringComparison.Ordinal));
+            if (candidate is not null)
+            {
+                _linkPeer = candidate;
+                _linkPeerJoined = true;
+                StopLinkExpiryTimer();
+                LinkExpiryLabel.Text = "Link is in use until you disconnect.";
+                LinkHostHintLabel.Text =
+                    $"{candidate.Name} is nearby on the private link. You can send files either way.";
+                UpdateLinkCard();
+            }
+        }
         if (!HasActiveTransfers())
         {
             UpdateWidget("idle", _engine?.Self?.Name ?? _settings.DeviceName,
@@ -469,7 +620,9 @@ public partial class MainPage : ContentPage
         if (self is null) return;
         PresenceNameLabel.Text = self.Name;
         PresenceInitials.Text = AndroidPalette.InitialsOf(self.Name);
-        PresenceSubLabel.Text = $"Visible on this Wi-Fi · port {self.Port}";
+        PresenceSubLabel.Text = _temporaryLinkActive
+            ? $"Temporary link · port {self.Port}"
+            : $"Visible on this Wi-Fi · port {self.Port}";
         PeerIdLabel.Text = self.Id;
         FingerprintLabel.Text = self.Fingerprint;
         SaveFolderLabel.Text = _settings.SaveDirectory;
@@ -741,7 +894,7 @@ public partial class MainPage : ContentPage
     private async void PeerSend_Tapped(object? sender, TappedEventArgs e)
     {
         if (e.Parameter is not string id) return;
-        var peer = _engine?.Peers.FirstOrDefault(p => p.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+        var peer = FindPeer(id);
         if (peer is not null) await PickAndSendAsync(peer);
     }
 
@@ -951,12 +1104,24 @@ public partial class MainPage : ContentPage
             ShowToast("Give this device a name first", IconError, error: true);
             return;
         }
+        if (HasActiveTransfers())
+        {
+            ShowToast("Finish or cancel the current transfer first.", IconInfo);
+            return;
+        }
         _settings.DeviceName = name;
         _settings.AutoAcceptTrusted = AutoAcceptSwitch.IsToggled;
         _settings.SoundsEnabled = SoundsSwitch.IsToggled;
         _settings.NotificationsEnabled = NotificationsSwitch.IsToggled;
         _settingsStore.Save(_settings);
         SettingsStatusLabel.Text = "Restarting…";
+        if (_temporaryLinkActive || _temporaryHotspot is not null || _temporaryWifiLink is not null)
+        {
+            // Restarting the engine would invalidate the hotspot token and
+            // source binding, so close the temporary link cleanly first.
+            await DisconnectTemporaryLinkAsync(restartEngine: false, notify: true);
+            await WaitForWifiRestoreAsync(TimeSpan.FromSeconds(8));
+        }
         await StartEngineAsync();
         SettingsStatusLabel.Text = "Saved.";
         ShowToast("Settings saved", IconCheck);
@@ -1059,6 +1224,25 @@ public partial class MainPage : ContentPage
         ShowToast("Peer ID copied", IconCheck);
     }
 
+    private async void OpenSourceCode_Click(object sender, EventArgs e) =>
+        await OpenExternalAsync("https://github.com/sudaissalisu/wisp");
+
+    private async void OpenLicense_Click(object sender, EventArgs e) =>
+        await OpenExternalAsync("https://github.com/sudaissalisu/wisp/blob/main/LICENSE");
+
+    private async Task OpenExternalAsync(string url)
+    {
+        try
+        {
+            await Launcher.Default.OpenAsync(url);
+        }
+        catch (Exception exception)
+        {
+            System.Diagnostics.Debug.WriteLine($"Could not open {url}: {exception.Message}");
+            ShowToast("No browser is available on this device.", IconInfo);
+        }
+    }
+
     private async void ForgetTrusted_Tapped(object? sender, TappedEventArgs e)
     {
         if (e.Parameter is not string fingerprint) return;
@@ -1097,9 +1281,7 @@ public partial class MainPage : ContentPage
         UpdateShareSheetState();
         await ShareSheetOverlay.FadeTo(1, 170, Easing.CubicOut);
         await EnsureDiscoveryHintAsync();
-        SharePeersHost.IsVisible = Peers.Count > 0;
-        ShareEmptyLabel.IsVisible = Peers.Count == 0;
-        ShareScanSpinner.IsRunning = Peers.Count == 0;
+        UpdateShareSheetState();
     }
 
     private void UpdateShareSheetState()
@@ -1107,9 +1289,11 @@ public partial class MainPage : ContentPage
         try
         {
             var hasPeers = Peers.Count > 0;
+            var visible = ShareSheetOverlay.IsVisible;
             SharePeersHost.IsVisible = hasPeers;
             ShareEmptyLabel.IsVisible = !hasPeers;
-            ShareScanSpinner.IsRunning = !hasPeers && ShareSheetOverlay.IsVisible;
+            ShareQrBlock.IsVisible = !hasPeers && visible && !_temporaryLinkActive;
+            ShareScanSpinner.IsRunning = !hasPeers && visible;
         }
         catch
         {
@@ -1124,10 +1308,25 @@ public partial class MainPage : ContentPage
         ShareScanSpinner.IsRunning = false;
     }
 
+    private async void ShareQrButton_Click(object? sender, EventArgs e)
+    {
+        if (_pendingSharePaths.Count > 0)
+        {
+            // Keep the staged files and send them automatically once the
+            // scanned link is connected.
+            _linkSendAfterConnect = _pendingSharePaths.ToArray();
+            _pendingSharePaths.Clear();
+            await ShareSheetOverlay.FadeTo(0, 120, Easing.CubicIn);
+            ShareSheetOverlay.IsVisible = false;
+            ShareScanSpinner.IsRunning = false;
+        }
+        await ScanTemporaryLinkAsync();
+    }
+
     private async void SharePeer_Tapped(object? sender, TappedEventArgs e)
     {
         if (e.Parameter is not string id) return;
-        var peer = _engine?.Peers.FirstOrDefault(p => p.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+        var peer = FindPeer(id);
         if (peer is null || _pendingSharePaths.Count == 0) return;
         var paths = _pendingSharePaths.ToArray();
         _pendingSharePaths.Clear();
@@ -1135,6 +1334,18 @@ public partial class MainPage : ContentPage
         ShareSheetOverlay.IsVisible = false;
         ShareScanSpinner.IsRunning = false;
         await SendToPeerAsync(peer, paths);
+    }
+
+    private PeerInfo? FindPeer(string id)
+    {
+        var peer = _engine?.Peers.FirstOrDefault(item =>
+            item.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+        if (peer is not null) return peer;
+        // The host added through a QR link is a manual peer and may not appear
+        // in native discovery results.
+        if (_linkPeer is not null && _linkPeer.Id.Equals(id, StringComparison.OrdinalIgnoreCase))
+            return _linkPeer;
+        return _peerById.TryGetValue(id, out var item2) ? item2.Info : null;
     }
 
     private async Task EnsureDiscoveryHintAsync()
@@ -1157,14 +1368,20 @@ public partial class MainPage : ContentPage
     {
         if (string.IsNullOrEmpty(_activeTransferId) && Transfers.Count > 0)
             _activeTransferId = Transfers.FirstOrDefault(t => t.IsActive)?.Id;
+        var existingProgress = 0.0;
+        if (!string.IsNullOrEmpty(_activeTransferId) &&
+            _transferById.TryGetValue(_activeTransferId, out var existing))
+        {
+            existingProgress = existing.Progress;
+        }
         TransferPeerLabel.Text = incoming ? $"Receiving from {peerName}" : $"Sending to {peerName}";
         TransferGlyph.Text = incoming ? "" : "";
-        TransferStateLabel.Text = state;
-        TransferProgressBar.Progress = 0;
-        TransferPercentLabel.Text = "0%";
+        TransferStateLabel.Text = existingProgress > 0 ? "Transferring…" : state;
+        TransferProgressBar.Progress = existingProgress;
+        TransferPercentLabel.Text = $"{existingProgress * 100:0}%";
         TransferSpeedLabel.Text = "";
-        MiniProgressBar.Progress = 0;
-        MiniProgressLabel.Text = "0%";
+        MiniProgressBar.Progress = existingProgress;
+        MiniProgressLabel.Text = $"{existingProgress * 100:0}%";
         MiniProgressGlyph.Text = incoming ? "" : "";
         _transferMinimized = false;
         TransferOverlay.IsVisible = true;
@@ -1254,6 +1471,825 @@ public partial class MainPage : ContentPage
         TransferOverlay.IsVisible = false;
         MiniProgressPill.IsVisible = false;
         _transferMinimized = false;
+    }
+
+    // ── Temporary QR link ────────────────────────────────────────────
+
+    private async void CreateTemporaryLink_Click(object? sender, EventArgs e)
+    {
+        if (_temporaryLinkBusy) return;
+        if (HasActiveTransfers())
+        {
+            ShowToast("Finish or cancel the current transfer first.", IconInfo);
+            return;
+        }
+        if (_temporaryLinkActive || _temporaryHotspot is not null || _temporaryWifiLink is not null)
+        {
+            ShowLinkOverlay();
+            return;
+        }
+        if (_engine is null)
+        {
+            ShowToast("Wisp is offline. Try again in a moment.", IconError, error: true);
+            return;
+        }
+        if (Build.VERSION.SdkInt < BuildVersionCodes.O)
+        {
+            ShowToast("Temporary links need Android 8 or newer.", IconError, error: true);
+            return;
+        }
+
+        _temporaryLinkBusy = true;
+        try
+        {
+            if (!await EnsureLinkPermissionsAsync(needCamera: false)) return;
+            _temporaryLinkRole = "host";
+            _activeLink = null;
+            _linkPeer = null;
+            _linkPeerJoined = false;
+            _temporaryLinkClosing = false;
+            ShowLinkOverlay();
+            LinkSubtitleLabel.Text = "Creating a private hotspot";
+            ShowLinkPanels(connecting: true);
+            LinkConnectingLabel.Text = "Starting a private hotspot…";
+            LinkConnectingPanel.IsVisible = true;
+
+            var hotspot = new TemporaryHotspot();
+            hotspot.Started += credentials => OnTemporaryHotspotStarted(hotspot, credentials);
+            hotspot.Failed += message => OnTemporaryHotspotFailed(hotspot, message);
+            hotspot.Stopped += () => OnTemporaryHotspotStopped(hotspot);
+            _temporaryHotspot = hotspot;
+            hotspot.Start();
+        }
+        catch (Exception exception)
+        {
+            ShowToast($"Could not create a temporary link: {exception.Message}",
+                IconError, error: true, durationSeconds: 7);
+            await DisconnectTemporaryLinkAsync(restartEngine: true, notify: false);
+        }
+        finally
+        {
+            _temporaryLinkBusy = false;
+        }
+    }
+
+    private async void ScanTemporaryLink_Click(object? sender, EventArgs e) =>
+        await ScanTemporaryLinkAsync();
+
+    private async Task ScanTemporaryLinkAsync()
+    {
+        if (_temporaryLinkBusy) return;
+        if (HasActiveTransfers())
+        {
+            _linkSendAfterConnect = null;
+            ShowToast("Finish or cancel the current transfer first.", IconInfo);
+            return;
+        }
+        if (_temporaryLinkActive || _temporaryHotspot is not null || _temporaryWifiLink is not null)
+        {
+            _linkSendAfterConnect = null;
+            ShowLinkOverlay();
+            return;
+        }
+        if (Build.VERSION.SdkInt < BuildVersionCodes.Q)
+        {
+            _linkSendAfterConnect = null;
+            ShowToast("Joining a temporary link needs Android 10 or newer.", IconError, error: true);
+            return;
+        }
+
+        _temporaryLinkBusy = true;
+        try
+        {
+            if (!await EnsureLinkPermissionsAsync(needCamera: true))
+            {
+                _linkSendAfterConnect = null;
+                return;
+            }
+            if (!BarcodeScanning.IsSupported)
+            {
+                _linkSendAfterConnect = null;
+                ShowToast("This phone has no usable camera for QR scanning.",
+                    IconError, error: true);
+                return;
+            }
+            _temporaryLinkRole = "scan";
+            _activeLink = null;
+            _linkPeer = null;
+            _linkPeerJoined = false;
+            _temporaryLinkClosing = false;
+            _scanPending = false;
+            ShowLinkOverlay();
+            LinkSubtitleLabel.Text = "Scan the other phone's code";
+            ShowLinkPanels(scan: true);
+            StartScannerDetection();
+            UpdateLinkCard();
+        }
+        catch (Exception exception)
+        {
+            _linkSendAfterConnect = null;
+            ShowToast($"Could not open the scanner: {exception.Message}",
+                IconError, error: true);
+            HideLinkOverlay();
+        }
+        finally
+        {
+            _temporaryLinkBusy = false;
+        }
+    }
+
+    private async void CloseTemporaryLink_Click(object? sender, EventArgs e)
+    {
+        // The close button only hides the sheet. A link that is already up
+        // keeps running so more files can be sent; ending it is explicit.
+        if (_temporaryLinkActive)
+        {
+            HideLinkOverlay();
+            ShowToast("Temporary link stays active. Use Disconnect to end it.", IconInfo);
+            return;
+        }
+        if (_temporaryHotspot is not null || _temporaryWifiLink is not null)
+        {
+            await DisconnectTemporaryLinkAsync(restartEngine: true, notify: false);
+            return;
+        }
+        _linkSendAfterConnect = null;
+        StopScannerDetection();
+        HideLinkOverlay();
+    }
+
+    private void OpenTemporaryLink_Click(object? sender, EventArgs e)
+    {
+        if (!_temporaryLinkActive) return;
+        ShowLinkOverlay();
+    }
+
+    private async void DisconnectTemporaryLink_Click(object? sender, EventArgs e)
+    {
+        await DisconnectTemporaryLinkAsync(restartEngine: true, notify: true, confirm: HasActiveTransfers());
+    }
+
+    private async void LinkSendFiles_Click(object? sender, EventArgs e)
+    {
+        if (_engine is null)
+        {
+            ShowToast("Wisp is offline", IconError, error: true);
+            return;
+        }
+        PeerInfo? target = _linkPeer;
+        if (target is null && _activeLink is not null)
+        {
+            target = _engine.Peers.FirstOrDefault(peer =>
+                peer.Fingerprint.Equals(_activeLink.Fingerprint, StringComparison.OrdinalIgnoreCase) ||
+                (peer.Host == _activeLink.Host && peer.Port == _activeLink.Port));
+        }
+        if (target is null && _temporaryLinkRole == "host" && _activeLink is not null &&
+            _activeLink.Host.LastIndexOf('.') > 0)
+        {
+            var subnet = _activeLink.Host[..(_activeLink.Host.LastIndexOf('.') + 1)];
+            var candidates = _engine.Peers
+                .Where(peer => peer.Online && peer.Host.StartsWith(subnet, StringComparison.Ordinal))
+                .ToList();
+            if (candidates.Count > 0) target = candidates[0];
+            else
+            {
+                ShowToast("The other phone has not appeared on the private link yet. It can send to you now; wait a moment before sending back.",
+                    IconInfo, durationSeconds: 7);
+                return;
+            }
+        }
+        await PickAndSendAsync(target);
+    }
+
+    private void OnTemporaryHotspotStarted(TemporaryHotspot source, HotspotCredentials credentials)
+    {
+        if (_closing || _temporaryLinkClosing ||
+            !ReferenceEquals(source, _temporaryHotspot)) return;
+        MainThread.BeginInvokeOnMainThread(async () =>
+        {
+            try
+            {
+                _temporaryLinkRole = "host";
+                _temporaryLinkActive = true;
+                _linkPeerJoined = false;
+                LinkConnectingLabel.Text = "Preparing the transfer engine…";
+                // The old engine was pinned to the home Wi-Fi, which may be
+                // unavailable while the soft AP is active. Start a fresh
+                // listener without a process-wide Wi-Fi binding; the accepted
+                // sockets arrive on the hotspot interface.
+                if (!await StartEngineAsync(bindWifi: false, discovery: true, announce: false))
+                {
+                    await FailTemporaryLinkAsync("The transfer engine could not start for the temporary link.");
+                    return;
+                }
+                if (_closing || _temporaryLinkClosing ||
+                    !ReferenceEquals(source, _temporaryHotspot)) return;
+                var engine = _engine;
+                if (engine is null) return;
+                var (host, usedFallback) = await ResolveHotspotHostAsync();
+                if (_closing || _temporaryLinkClosing ||
+                    !ReferenceEquals(source, _temporaryHotspot)) return;
+                var token = NewLinkToken();
+                if (!engine.SetExpectedLinkToken(token))
+                {
+                    await FailTemporaryLinkAsync("Could not arm the one-time link token.");
+                    return;
+                }
+                // The soft AP is not a ConnectivityManager network, so pin the
+                // host's outgoing transfer sockets to its hotspot address.
+                engine.SetBindAddress(host);
+                var payload = QrLinkPayload.Create(
+                    credentials.Ssid,
+                    credentials.Passphrase,
+                    host,
+                    engine.ListenPort,
+                    engine.Fingerprint,
+                    token,
+                    _settings.DeviceName,
+                    TemporaryLinkLifetime);
+                _activeLink = payload;
+                _linkPeer = null;
+                LinkQrImage.Source = QrCodeRenderer.Create(payload.ToUriString());
+                LinkSsidLabel.Text = payload.Ssid;
+                LinkPassphraseLabel.Text = $"Password {payload.Passphrase}";
+                LinkEndpointLabel.Text = $"{payload.EndpointText} · pinned {ShortFingerprint(payload.Fingerprint)}";
+                LinkSubtitleLabel.Text = "Scan this code on the other phone";
+                LinkExpiryLabel.Text = "Preparing expiry…";
+                ShowLinkPanels(host: true);
+                StartLinkExpiryTimer(payload);
+                UpdateLinkCard();
+                UpdatePeerUi();
+                ShowToast(usedFallback
+                        ? "Temporary link ready (using the standard hotspot address)"
+                        : "Temporary link ready", IconCheck, durationSeconds: 5);
+                if (usedFallback)
+                {
+                    ShowToast("Could not detect the hotspot IP; the code uses 192.168.43.1. If scanning fails, use a shared Wi-Fi network instead.",
+                        IconInfo, durationSeconds: 10);
+                }
+            }
+            catch (Exception exception)
+            {
+                await FailTemporaryLinkAsync($"Could not prepare the temporary link: {exception.Message}");
+            }
+        });
+    }
+
+    private void OnTemporaryHotspotFailed(TemporaryHotspot source, string message)
+    {
+        if (_closing || _temporaryLinkClosing ||
+            !ReferenceEquals(source, _temporaryHotspot)) return;
+        _ = FailTemporaryLinkAsync(message);
+    }
+
+    private void OnTemporaryHotspotStopped(TemporaryHotspot source)
+    {
+        if (_closing || _temporaryLinkClosing ||
+            !ReferenceEquals(source, _temporaryHotspot)) return;
+        ShowToast("The temporary hotspot stopped.", IconInfo);
+        _ = DisconnectTemporaryLinkAsync(restartEngine: true, notify: false);
+    }
+
+    private void Scanner_BarcodesDetected(object? sender, BarcodeDetectionEventArgs e)
+    {
+        if (_scannerHandling) return;
+        var result = e.Results?.FirstOrDefault(item => item.Format == BarcodeFormat.QrCode)
+                     ?? e.Results?.FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(result?.Value)) return;
+        _scannerHandling = true;
+        var value = result.Value;
+        MainThread.BeginInvokeOnMainThread(async () =>
+        {
+            try
+            {
+                if (!LinkScanPanel.IsVisible || _temporaryLinkActive)
+                {
+                    _scannerHandling = false;
+                    return;
+                }
+                StopScannerDetection();
+                await JoinTemporaryLinkAsync(value);
+            }
+            finally
+            {
+                _scannerHandling = false;
+            }
+        });
+    }
+
+    private async Task JoinTemporaryLinkAsync(string rawValue)
+    {
+        if (!QrLinkPayload.TryParse(rawValue, out var payload, out var error) || payload is null)
+        {
+            LinkScanStatusLabel.Text = error;
+            ShowToast(error, IconError, error: true);
+            await Task.Delay(1200);
+            if (LinkScanPanel.IsVisible && !_temporaryLinkActive && !_temporaryLinkClosing)
+            {
+                StartScannerDetection();
+            }
+            return;
+        }
+
+        _temporaryLinkRole = "scan";
+        _activeLink = payload;
+        _linkPeer = null;
+        _linkPeerJoined = false;
+        LinkSubtitleLabel.Text = $"Connecting to {payload.DeviceName}";
+        ShowLinkPanels(connecting: true);
+        LinkConnectingLabel.Text = $"Joining {payload.Ssid}…";
+
+        var wifiLink = new TemporaryWifiLink();
+        wifiLink.Connected += network => OnTemporaryWifiConnected(wifiLink, network);
+        wifiLink.Failed += message => OnTemporaryWifiFailed(wifiLink, message);
+        wifiLink.Lost += () => OnTemporaryWifiLost(wifiLink);
+        _temporaryWifiLink = wifiLink;
+        if (!wifiLink.Join(payload.Ssid, payload.Passphrase))
+        {
+            await FailTemporaryLinkAsync("Could not join the temporary Wi-Fi.");
+        }
+    }
+
+    private void OnTemporaryWifiFailed(TemporaryWifiLink source, string message)
+    {
+        if (_closing || _temporaryLinkClosing ||
+            !ReferenceEquals(source, _temporaryWifiLink)) return;
+        _ = FailTemporaryLinkAsync(message);
+    }
+
+    private void OnTemporaryWifiLost(TemporaryWifiLink source)
+    {
+        if (_closing || _temporaryLinkClosing ||
+            !ReferenceEquals(source, _temporaryWifiLink)) return;
+        ShowToast("The temporary Wi-Fi link was lost.", IconInfo);
+        _ = DisconnectTemporaryLinkAsync(restartEngine: true, notify: false);
+    }
+
+    private void OnTemporaryWifiConnected(TemporaryWifiLink source, Network network)
+    {
+        if (_closing || _temporaryLinkClosing ||
+            !ReferenceEquals(source, _temporaryWifiLink)) return;
+        MainThread.BeginInvokeOnMainThread(async () =>
+        {
+            var payload = _activeLink;
+            if (payload is null || _temporaryLinkRole != "scan" ||
+                !ReferenceEquals(source, _temporaryWifiLink)) return;
+            try
+            {
+                LinkConnectingLabel.Text = "Adding the other phone as a pinned peer…";
+                // The process is already bound to the temporary network by
+                // TemporaryWifiLink, so clearBindings must stay false.
+                if (!await StartEngineAsync(bindWifi: false, discovery: true,
+                        announce: false, clearBindings: false))
+                {
+                    await FailTemporaryLinkAsync("The transfer engine could not start on the temporary link.");
+                    return;
+                }
+                if (_closing || _temporaryLinkClosing ||
+                    !ReferenceEquals(source, _temporaryWifiLink)) return;
+                var engine = _engine;
+                if (engine is null) return;
+                if (!engine.SetLinkToken(payload.Token))
+                {
+                    await FailTemporaryLinkAsync("Could not apply the one-time link token.");
+                    return;
+                }
+                var peer = new PeerInfo
+                {
+                    Name = payload.DeviceName,
+                    Platform = "android",
+                    Host = payload.Host,
+                    Port = payload.Port,
+                    Fingerprint = payload.Fingerprint,
+                    Online = true
+                };
+                if (!engine.AddPeer(peer))
+                {
+                    await FailTemporaryLinkAsync("The host address from the QR code was rejected.");
+                    return;
+                }
+                _linkPeer = peer;
+                _temporaryLinkActive = true;
+                _linkPeerJoined = true;
+                StopLinkExpiryTimer();
+                ApplyPeer(new PeerEventArgs(peer, true));
+                LinkSubtitleLabel.Text = $"Connected to {payload.DeviceName}";
+                LinkConnectedLabel.Text = $"Connected to {payload.DeviceName}";
+                LinkConnectedEndpointLabel.Text =
+                    $"{payload.EndpointText} · pinned {ShortFingerprint(payload.Fingerprint)}";
+                ShowLinkPanels(connected: true);
+                UpdateLinkCard();
+                UpdatePeerUi();
+                ShowToast($"Connected to {payload.DeviceName} over a private link",
+                    IconCheck, durationSeconds: 6);
+                var queued = _linkSendAfterConnect;
+                _linkSendAfterConnect = null;
+                if (queued is { Length: > 0 })
+                {
+                    HideLinkOverlay();
+                    ShowToast($"Connected. Sending {queued.Length} staged file(s)…",
+                        IconCheck, durationSeconds: 6);
+                    await SendToPeerAsync(peer, queued);
+                }
+            }
+            catch (Exception exception)
+            {
+                await FailTemporaryLinkAsync($"Could not use the temporary link: {exception.Message}");
+            }
+        });
+    }
+
+    private async Task FailTemporaryLinkAsync(string message)
+    {
+        if (_closing || _temporaryLinkClosing) return;
+        ShowToast(message, IconError, error: true, durationSeconds: 8);
+        if (LinkScanPanel.IsVisible) LinkScanStatusLabel.Text = message;
+        await DisconnectTemporaryLinkAsync(restartEngine: true, notify: false);
+    }
+
+    private async Task DisconnectTemporaryLinkAsync(bool restartEngine, bool notify,
+        bool confirm = false)
+    {
+        if (_temporaryLinkClosing) return;
+        if (confirm && HasActiveTransfers())
+        {
+            var proceed = await DisplayAlertAsync("Disconnect the temporary link?",
+                "An active transfer will stop.", "Disconnect", "Keep link");
+            if (!proceed) return;
+        }
+        _temporaryLinkClosing = true;
+        try
+        {
+            StopLinkExpiryTimer();
+            StopScannerDetection();
+            _scanPending = false;
+
+            var hotspot = _temporaryHotspot;
+            _temporaryHotspot = null;
+            var wifiLink = _temporaryWifiLink;
+            _temporaryWifiLink = null;
+            try
+            {
+                hotspot?.Stop();
+                hotspot?.Dispose();
+            }
+            catch
+            {
+            }
+            try
+            {
+                wifiLink?.Disconnect();
+                wifiLink?.Dispose();
+            }
+            catch
+            {
+            }
+
+            var engine = _engine;
+            try
+            {
+                engine?.SetExpectedLinkToken("");
+                engine?.SetLinkToken("");
+            }
+            catch
+            {
+            }
+
+            _temporaryLinkActive = false;
+            _temporaryLinkRole = "";
+            _activeLink = null;
+            _linkPeer = null;
+            _linkPeerJoined = false;
+            _linkSendAfterConnect = null;
+            LinkHostHintLabel.Text = "Waiting for the other phone to scan this code…";
+            HideLinkOverlay();
+            UpdateLinkCard();
+            UpdatePeerUi();
+
+            if (restartEngine && !_closing)
+            {
+                if (notify) ShowToast("Closing the temporary link and restoring Wi-Fi…", IconInfo);
+                await WaitForWifiRestoreAsync(TimeSpan.FromSeconds(8));
+                if (!_closing)
+                {
+                    var started = await StartEngineAsync(bindWifi: true, discovery: true,
+                        announce: false);
+                    if (notify && started) ShowToast("Back on normal Wi-Fi", IconCheck);
+                }
+            }
+        }
+        finally
+        {
+            _temporaryLinkClosing = false;
+        }
+    }
+
+    private void StopTemporaryLinkResources()
+    {
+        _temporaryLinkClosing = true;
+        try
+        {
+            StopLinkExpiryTimer();
+            ReleaseScanner();
+            var hotspot = _temporaryHotspot;
+            _temporaryHotspot = null;
+            var wifiLink = _temporaryWifiLink;
+            _temporaryWifiLink = null;
+            try
+            {
+                hotspot?.Stop();
+                hotspot?.Dispose();
+            }
+            catch
+            {
+            }
+            try
+            {
+                wifiLink?.Disconnect();
+                wifiLink?.Dispose();
+            }
+            catch
+            {
+            }
+            _temporaryLinkActive = false;
+            _temporaryLinkRole = "";
+            _activeLink = null;
+            _linkPeer = null;
+        }
+        finally
+        {
+            _temporaryLinkClosing = false;
+        }
+    }
+
+    private void ShowLinkOverlay()
+    {
+        LinkOverlay.IsVisible = true;
+        LinkOverlay.Opacity = 1;
+        UpdateLinkCard();
+    }
+
+    private void HideLinkOverlay()
+    {
+        ReleaseScanner();
+        LinkOverlay.IsVisible = false;
+        LinkOverlay.Opacity = 0;
+        if (!_temporaryLinkActive) ShowLinkPanels();
+    }
+
+    private void ShowLinkPanels(bool host = false, bool scan = false,
+        bool connecting = false, bool connected = false)
+    {
+        LinkHostPanel.IsVisible = host;
+        LinkScanPanel.IsVisible = scan;
+        LinkConnectingPanel.IsVisible = connecting;
+        LinkConnectedPanel.IsVisible = connected;
+        if (!scan) ReleaseScanner();
+    }
+
+    private void StartScannerDetection()
+    {
+        try
+        {
+            if (_linkScanner is null)
+            {
+                _linkScanner = new CameraBarcodeReaderView
+                {
+                    CameraLocation = CameraLocation.Rear,
+                    IsDetecting = false
+                };
+                _linkScanner.BarcodesDetected += Scanner_BarcodesDetected;
+                ScannerHost.Children.Add(_linkScanner);
+            }
+            _linkScanner.Options = new BarcodeReaderOptions
+            {
+                Formats = BarcodeFormat.QrCode,
+                AutoRotate = true,
+                Multiple = false,
+                TryHarder = true,
+                DelayBetweenAnalyzingFrames = 120,
+                InitialDelayBeforeAnalyzingFrames = 200
+            };
+            _linkScanner.IsVisible = true;
+            _linkScanner.IsDetecting = true;
+            LinkScanSpinner.IsRunning = true;
+            LinkScanStatusLabel.Text = "Point at the other phone's QR code";
+        }
+        catch (Exception exception)
+        {
+            LinkScanStatusLabel.Text = $"Camera unavailable: {exception.Message}";
+            LinkScanSpinner.IsRunning = false;
+            ReleaseScanner();
+            ShowToast("The camera could not be started. Check Camera permission in Settings → Apps → Wisp.",
+                IconError, error: true, durationSeconds: 7);
+        }
+    }
+
+    private void StopScannerDetection()
+    {
+        try
+        {
+            if (_linkScanner is not null) _linkScanner.IsDetecting = false;
+        }
+        catch
+        {
+        }
+        LinkScanSpinner.IsRunning = false;
+    }
+
+    private void ReleaseScanner()
+    {
+        StopScannerDetection();
+        var scanner = _linkScanner;
+        _linkScanner = null;
+        if (scanner is null) return;
+        try
+        {
+            scanner.BarcodesDetected -= Scanner_BarcodesDetected;
+        }
+        catch
+        {
+        }
+        try
+        {
+            if (ScannerHost.Children.Contains(scanner)) ScannerHost.Children.Remove(scanner);
+        }
+        catch
+        {
+        }
+    }
+
+    private async Task<bool> EnsureLinkPermissionsAsync(bool needCamera)
+    {
+        try
+        {
+            if (needCamera)
+            {
+                var camera = await Permissions.CheckStatusAsync<Permissions.Camera>();
+                if (camera != PermissionStatus.Granted)
+                    camera = await Permissions.RequestAsync<Permissions.Camera>();
+                if (camera != PermissionStatus.Granted)
+                {
+                    ShowToast("Camera access is needed to scan a temporary link code.",
+                        IconError, error: true);
+                    return false;
+                }
+            }
+
+            var nearbyGranted = OperatingSystem.IsAndroidVersionAtLeast(33) &&
+                ContextCompat.CheckSelfPermission(AndroidApplication.Context,
+                    global::Android.Manifest.Permission.NearbyWifiDevices) == Permission.Granted;
+            if (OperatingSystem.IsAndroidVersionAtLeast(33) && !nearbyGranted)
+            {
+                var nearbyStatus = await Permissions.RequestAsync<Permissions.NearbyWifiDevices>();
+                nearbyGranted = nearbyStatus == PermissionStatus.Granted;
+            }
+            if (!nearbyGranted)
+            {
+                var location = await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
+                if (location != PermissionStatus.Granted)
+                    location = await Permissions.RequestAsync<Permissions.LocationWhenInUse>();
+                if (location != PermissionStatus.Granted)
+                {
+                    ShowToast("Allow Nearby devices or Location so Wisp can create or join a temporary Wi-Fi link.",
+                        IconError, error: true, durationSeconds: 7);
+                    return false;
+                }
+            }
+            AndroidPermissions.RequestAll();
+            return true;
+        }
+        catch (Exception exception)
+        {
+            ShowToast($"Could not request permissions: {exception.Message}",
+                IconError, error: true);
+            return false;
+        }
+    }
+
+    private void StartLinkExpiryTimer(QrLinkPayload payload)
+    {
+        StopLinkExpiryTimer();
+        UpdateLinkExpiry(payload);
+        _linkExpiryTimer = Dispatcher.CreateTimer();
+        _linkExpiryTimer.Interval = TimeSpan.FromSeconds(1);
+        _linkExpiryTimer.IsRepeating = true;
+        _linkExpiryTimer.Tick += (_, _) =>
+        {
+            if (_temporaryLinkClosing || !_temporaryLinkActive || _temporaryLinkRole != "host")
+            {
+                StopLinkExpiryTimer();
+                return;
+            }
+            if (_linkPeerJoined || HasActiveTransfers())
+            {
+                LinkExpiryLabel.Text = "Link is in use until you disconnect.";
+                StopLinkExpiryTimer();
+                return;
+            }
+            if (UpdateLinkExpiry(payload))
+            {
+                StopLinkExpiryTimer();
+                ShowToast("The temporary connection code expired.", IconInfo);
+                _ = DisconnectTemporaryLinkAsync(restartEngine: true, notify: false);
+            }
+        };
+        _linkExpiryTimer.Start();
+    }
+
+    private bool UpdateLinkExpiry(QrLinkPayload payload)
+    {
+        var remaining = payload.ExpiresAt - DateTimeOffset.UtcNow;
+        if (remaining <= TimeSpan.Zero)
+        {
+            LinkExpiryLabel.Text = "Code expired";
+            return true;
+        }
+        LinkExpiryLabel.Text = remaining.TotalMinutes >= 1
+            ? $"Code expires in {remaining.Minutes}:{remaining.Seconds:00}"
+            : $"Code expires in {remaining.Seconds}s";
+        return false;
+    }
+
+    private void StopLinkExpiryTimer()
+    {
+        _linkExpiryTimer?.Stop();
+        _linkExpiryTimer = null;
+    }
+
+    private void UpdateLinkCard()
+    {
+        LinkActiveBadge.IsVisible = _temporaryLinkActive;
+        LinkSummaryLabel.IsVisible = _temporaryLinkActive;
+        LinkIdleActions.IsVisible = !_temporaryLinkActive;
+        LinkActiveActions.IsVisible = _temporaryLinkActive;
+        LinkCardHintLabel.Text = _temporaryLinkActive
+            ? _temporaryLinkRole == "host"
+                ? "Hosting a private Wi-Fi link. Open the link to show the QR code again."
+                : "Connected over a private link. Open the link to send files or disconnect."
+            : "No shared Wi-Fi? Make a private hotspot and scan a QR code.";
+        if (!_temporaryLinkActive)
+        {
+            LinkSummaryLabel.Text = "";
+            return;
+        }
+        if (_temporaryLinkRole == "host" && _activeLink is not null)
+        {
+            LinkSummaryLabel.Text = _linkPeerJoined
+                ? $"Private link · a phone joined at {_activeLink.EndpointText}"
+                : $"Hosting a private link · {_activeLink.EndpointText}";
+            if (!_linkPeerJoined)
+                LinkHostHintLabel.Text = "Waiting for the other phone to scan this code…";
+        }
+        else if (_temporaryLinkRole == "scan" && _activeLink is not null)
+        {
+            LinkSummaryLabel.Text = $"Private link · connected to {_activeLink.DeviceName}";
+        }
+    }
+
+    private static async Task<(string Host, bool UsedFallback)> ResolveHotspotHostAsync()
+    {
+        // The soft-AP interface is not always configured the instant onStarted
+        // fires, so give the kernel a few hundred milliseconds to assign IPv4.
+        for (var attempt = 0; attempt < 8; attempt++)
+        {
+            var address = HotspotAddressResolver.Resolve(AndroidApplication.Context);
+            if (!string.IsNullOrWhiteSpace(address)) return (address, false);
+            await Task.Delay(250);
+        }
+        return (HotspotAddressResolver.CommonFallbackAddress, true);
+    }
+
+    private static string NewLinkToken() =>
+        Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
+
+    private static string ShortFingerprint(string fingerprint) =>
+        fingerprint.Length <= 20 ? fingerprint : $"{fingerprint[..10]}…{fingerprint[^10..]}";
+
+    private static async Task WaitForWifiRestoreAsync(TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            try
+            {
+                var manager = (ConnectivityManager)AndroidApplication.Context
+                    .GetSystemService(Context.ConnectivityService)!;
+                var network = manager.ActiveNetwork;
+                if (network is not null)
+                {
+                    var capabilities = manager.GetNetworkCapabilities(network);
+                    // The previous home Wi-Fi has internet capability; the
+                    // just-released LocalOnlyHotspot does not.
+                    if (capabilities?.HasTransport(TransportType.Wifi) == true &&
+                        capabilities.HasCapability(NetCapability.Internet)) return;
+                }
+            }
+            catch
+            {
+            }
+            await Task.Delay(350);
+        }
     }
 
     // ── Onboarding ────────────────────────────────────────────────────
@@ -1493,48 +2529,69 @@ public partial class MainPage : ContentPage
         }
     }
 
-    private void BindToWifiNetwork()
+    private bool BindToWifiNetwork()
     {
         try
         {
             var connectivity = (ConnectivityManager)AndroidApplication.Context
                 .GetSystemService(Context.ConnectivityService)!;
+            Network? fallback = null;
+#pragma warning disable CA1422 // GetAllNetworks still works on current Android releases.
             foreach (var network in connectivity.GetAllNetworks())
             {
                 var capabilities = connectivity.GetNetworkCapabilities(network);
                 if (capabilities?.HasTransport(TransportType.Wifi) != true) continue;
-                if (connectivity.BindProcessToNetwork(network)) _boundWifiNetwork = network;
-                break;
+                if (capabilities.HasCapability(NetCapability.Internet))
+                {
+                    if (connectivity.BindProcessToNetwork(network))
+                    {
+                        _boundWifiNetwork = network;
+                        return true;
+                    }
+                }
+                fallback ??= network;
             }
-        }
-        catch
-        {
-        }
-    }
-
-    private void UnbindWifiNetwork()
-    {
-        try
-        {
-            if (_boundWifiNetwork is null) return;
-            var connectivity = (ConnectivityManager)AndroidApplication.Context
-                .GetSystemService(Context.ConnectivityService)!;
+#pragma warning restore CA1422
+            if (fallback is not null && connectivity.BindProcessToNetwork(fallback))
+            {
+                _boundWifiNetwork = fallback;
+                return true;
+            }
+            // Do not leave the process pinned to a network that vanished while
+            // the hotspot was active.
             connectivity.BindProcessToNetwork(null);
             _boundWifiNetwork = null;
         }
         catch
         {
         }
+        return false;
+    }
+
+    private void UnbindWifiNetwork()
+    {
+        try
+        {
+            var connectivity = (ConnectivityManager)AndroidApplication.Context
+                .GetSystemService(Context.ConnectivityService)!;
+            connectivity.BindProcessToNetwork(null);
+        }
+        catch
+        {
+        }
+        _boundWifiNetwork = null;
     }
 
     private void AcquireMulticastLock()
     {
+        if (_multicastLock is not null) return;
         try
         {
             var wifi = (WifiManager)AndroidApplication.Context.GetSystemService(Context.WifiService)!;
-            _multicastLock = wifi.CreateMulticastLock("wisp-nearby");
-            _multicastLock.SetReferenceCounted(false);
-            _multicastLock.Acquire();
+            var multicastLock = wifi.CreateMulticastLock("wisp-nearby")!;
+            multicastLock.SetReferenceCounted(false);
+            multicastLock.Acquire();
+            _multicastLock = multicastLock;
         }
         catch
         {

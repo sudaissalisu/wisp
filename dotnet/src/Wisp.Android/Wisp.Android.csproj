@@ -32,8 +32,8 @@
 		<ApplicationId>com.wisp.app</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>0.1.0</ApplicationDisplayVersion>
-		<ApplicationVersion>1</ApplicationVersion>
+		<ApplicationDisplayVersion>0.2.0</ApplicationDisplayVersion>
+		<ApplicationVersion>2</ApplicationVersion>
 		<!-- Ship assemblies inside every APK so an APK shared to any phone opens
 		     without a debugger or fast-deployment sync. -->
 		<EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
@@ -63,6 +63,9 @@
 		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
 		<PackageReference Include="Xamarin.AndroidX.Biometric" Version="1.1.0.33" />
+		<!-- Camera QR scanning and offline QR generation for temporary links. -->
+		<PackageReference Include="ZXing.Net.Maui.Controls" Version="0.10.4" />
+		<PackageReference Include="QRCoder" Version="1.8.1" />
 	</ItemGroup>
 
 	<ItemGroup>
