@@ -71,7 +71,7 @@ public sealed partial class MainWindow : Window
         AutoAcceptTrustedToggle.IsOn = _settings.AutoAcceptTrusted;
         SoundsToggle.IsOn = _settings.SoundsEnabled;
         _sounds.Enabled = _settings.SoundsEnabled;
-        AboutText.Text = $"Wisp {WispEngine.Version}  ·  protocol 1  ·  local only";
+        AboutText.Text = $"Wisp {typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "0.2.0"}";
         RefreshTrusted();
         RefreshHistory();
         SetupTrayIcon();

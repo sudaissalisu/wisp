@@ -759,7 +759,13 @@
                                     <TextBlock Text="About Wisp" Style="{StaticResource SectionTextStyle}" />
                                     <TextBlock x:Name="AboutText" Text="Wisp"
                                                Style="{StaticResource SecondaryTextStyle}" />
+                                    <TextBlock Text="A project by SSM Limited. Free and open source."
+                                               Style="{StaticResource CaptionTextStyle}" />
                                     <TextBlock Text="Local-first file transfer. No account, no cloud relay, no analytics. Files are protected with TLS 1.3 and verified chunk-by-chunk."
+                                               Style="{StaticResource CaptionTextStyle}" />
+                                    <HyperlinkButton Content="View source on GitHub" Padding="0"
+                                                     NavigateUri="https://github.com/sudaissalisu/wisp" />
+                                    <TextBlock Text="© 2026 SSM Limited · MIT License"
                                                Style="{StaticResource CaptionTextStyle}" />
                                 </StackPanel>
                             </Border>
