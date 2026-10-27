@@ -14,10 +14,17 @@ await File.WriteAllBytesAsync(source, data);
 using var receiver = new WispEngine();
 using var sender = new WispEngine();
 var senderCompletion = new TaskCompletionSource<TransferCompletion>(TaskCreationOptions.RunContinuationsAsynchronously);
+var senderProgressEvents = 0;
+var receiverProgressEvents = 0;
 
 receiver.TransferCompleted += (_, completion) =>
 {
     Console.WriteLine($"receiver complete: {completion.TransferId} -> {completion.SavedPath}");
+};
+receiver.ProgressChanged += (_, progress) =>
+{
+    if (progress.BytesDone > 0 && progress.BytesDone < progress.BytesTotal)
+        Interlocked.Increment(ref receiverProgressEvents);
 };
 receiver.TransferFailed += (_, failure) =>
 {
@@ -31,6 +38,11 @@ sender.TransferCompleted += (_, completion) =>
 {
     Console.WriteLine($"sender complete: {completion.TransferId}");
     senderCompletion.TrySetResult(completion);
+};
+sender.ProgressChanged += (_, progress) =>
+{
+    if (progress.BytesDone > 0 && progress.BytesDone < progress.BytesTotal)
+        Interlocked.Increment(ref senderProgressEvents);
 };
 sender.TransferFailed += (_, failure) =>
 {
@@ -59,6 +71,27 @@ sender.Start(new WispConfig
 });
 
 var receiverPeer = receiver.Self ?? throw new InvalidOperationException("Receiver has no identity.");
+const string linkToken = "0123456789abcdef0123456789abcdef";
+var qr = QrLinkPayload.Create(
+    "Wisp & Phone", "pass phrase+&=/%20", "192.168.43.1", 54321,
+    receiverPeer.Fingerprint, linkToken, "Phone 😊", TimeSpan.FromMinutes(2));
+if (!qr.TryValidate(out var qrError))
+    throw new InvalidOperationException($"Generated QR payload is invalid: {qrError}");
+if (!QrLinkPayload.TryParse(qr.ToUriString(), out var parsedQr, out var parseError) ||
+    parsedQr is null)
+    throw new InvalidOperationException($"Could not parse the generated QR payload: {parseError}");
+if (parsedQr.Ssid != qr.Ssid || parsedQr.Passphrase != qr.Passphrase ||
+    parsedQr.Host != qr.Host || parsedQr.Port != qr.Port ||
+    parsedQr.Fingerprint != qr.Fingerprint || parsedQr.Token != qr.Token ||
+    parsedQr.DeviceName != qr.DeviceName)
+    throw new InvalidOperationException("QR payload fields did not round-trip.");
+Console.WriteLine($"QR payload round-trip: {parsedQr.EndpointText}, {parsedQr.DeviceName}");
+if (!receiver.SetExpectedLinkToken(linkToken))
+    throw new InvalidOperationException("Could not set the expected link token.");
+if (!sender.SetLinkToken(linkToken))
+    throw new InvalidOperationException("Could not set the sender link token.");
+if (!sender.SetBindAddress("127.0.0.1"))
+    throw new InvalidOperationException("Could not bind the sender source address.");
 if (!sender.AddPeer(receiverPeer with { Host = "127.0.0.1" }))
     throw new InvalidOperationException("Could not add the receiver as a peer.");
 
@@ -67,6 +100,11 @@ var transferId = sender.Send([source], receiverPeer.Id);
 Console.WriteLine($"started transfer {transferId}");
 var completion = await senderCompletion.Task.WaitAsync(TimeSpan.FromSeconds(60));
 var elapsed = DateTime.UtcNow - started;
+
+if (senderProgressEvents == 0 || receiverProgressEvents == 0)
+    throw new InvalidOperationException(
+        $"Intermediate progress was missing (sender={senderProgressEvents}, receiver={receiverProgressEvents}).");
+Console.WriteLine($"progress events: sender={senderProgressEvents}, receiver={receiverProgressEvents}");
 
 var received = Path.Combine(receiveRoot, "payload.bin");
 if (!File.Exists(received)) throw new InvalidOperationException("Received file is missing.");

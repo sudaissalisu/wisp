@@ -72,6 +72,21 @@ internal static class NativeMethods
         [MarshalAs(UnmanagedType.LPUTF8Str)] string? fingerprint);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern int wisp_engine_set_link_token(
+        IntPtr engine,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? linkToken);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern int wisp_engine_set_expected_link_token(
+        IntPtr engine,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? expectedToken);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
+    internal static extern int wisp_engine_set_bind_address(
+        IntPtr engine,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? address);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]
     internal static extern int wisp_engine_get_peers(IntPtr engine, IntPtr jsonOut, UIntPtr jsonOutSize);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl)]

@@ -199,6 +199,40 @@ public sealed class WispEngine : IDisposable
         return result == 0;
     }
 
+    /// <summary>
+    /// Sets the one-time token this device presents in its Hello frame when it
+    /// connects over a QR-created hotspot. Empty clears it.
+    /// </summary>
+    public bool SetLinkToken(string? token)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_handle == IntPtr.Zero) return false;
+        return NativeMethods.wisp_engine_set_link_token(_handle, token ?? "") == 0;
+    }
+
+    /// <summary>
+    /// Sets the one-time token this device requires from a QR scanner. The
+    /// native engine binds it to the first matching peer certificate.
+    /// </summary>
+    public bool SetExpectedLinkToken(string? token)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_handle == IntPtr.Zero) return false;
+        return NativeMethods.wisp_engine_set_expected_link_token(_handle, token ?? "") == 0;
+    }
+
+    /// <summary>
+    /// Binds outgoing transfer sockets to a local source address. The Android
+    /// LocalOnlyHotspot host uses its soft-AP IPv4 address so its own sends use
+    /// the hotspot interface. Empty clears the binding.
+    /// </summary>
+    public bool SetBindAddress(string? address)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_handle == IntPtr.Zero) return false;
+        return NativeMethods.wisp_engine_set_bind_address(_handle, address ?? "") == 0;
+    }
+
     public IReadOnlyList<PeerInfo> RefreshPeers()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
