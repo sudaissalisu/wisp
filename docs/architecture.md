@@ -11,8 +11,12 @@ A flat C ABI shared library (`wisp_core.dll` / `libwisp_core.so`) owns:
 - Fingerprint pinning and pairing-code derivation
 - Frame encoding/decoding and bounded manifest parsing
 - Outgoing and incoming transfer state machines
-- Four parallel TLS data channels and a control channel
+- Two to six parallel TLS data channels and a control channel; the sender picks
+  the count from CPU cores and transfer size unless a fixed 1–8 is configured
+- Work-stealing chunk scheduling from one atomic chunk counter
 - Per-chunk SHA-256 calculation and verification
+- Zero-copy DATA framing: frame header, chunk metadata and file bytes are
+  written to TLS without a second 4 MiB payload copy
 - Filesystem writes through positioned I/O, `.part` files, and atomic finalization
 - UDP LAN discovery: limited broadcast, directed subnet broadcast, multicast, and a unicast subnet sweep
 
@@ -68,6 +72,10 @@ Events are raised on native worker threads. The UIs must marshal them to their d
 - QR-first entry points in the empty Nearby state and the share sheet; a scanned link can send staged share files automatically. An active link stays up when its sheet is closed, with Open link and Disconnect actions on Nearby. Back closes the topmost sheet, leaves a Settings category, or returns to the previous tab (Nearby is home) before the app can exit; `MainActivity` registers an AndroidX `OnBackPressedCallback` because .NET 10 MAUI does not route back to a root page's override.
 - Trusted devices are matched by the TLS fingerprint in the offer and skip the six-digit code on later transfers; first contact always shows it. Per-device auto-accept is opt-in on Windows, and Android uses the Settings master toggle for any trusted device.
 - The About screen identifies Wisp as a project by SSM Limited, shows the app version, and links to the MIT source and license.
+- Files tab over the received-files folder with type filters, total count/size, and refresh-on-open/after-transfer.
+- `MediaViewer` runs native Android dialogs for images, video and audio: a zoomable image view, `VideoView` plus its underlying `MediaPlayer` for speed/mute, and a `MediaPlayer` audio player with audio focus. Leaving the app dismisses the viewer.
+- Transfer history rows open the received files; multi-file transfers show a relative-path picker. Non-media files are shared through a minimal FileProvider (`com.wisp.app.fileprovider`).
+- A floating minimized-transfer dock above the navigation bar shows title, percent, status/speed and Cancel, and expands back to the live sheet on tap.
 - Share-sheet receiver (`ACTION_SEND` / `ACTION_SEND_MULTIPLE`) and file picker staging
 - `WispForegroundService` keeps the process alive while a transfer is active
 - Received files are written under the app-specific external directory and copied to `Downloads/Wisp` through MediaStore on Android 10+
@@ -154,18 +162,24 @@ Discovery advertisements are public and unauthenticated. They are only a rendezv
 
 ## Why parallel TLS channels?
 
-A single TLS connection serializes all data through one OpenSSL instance and one core's encryption work. Four channels:
+A single TLS connection serializes all data through one OpenSSL instance and one core's encryption work. Wisp uses 2–6 data channels:
 
 - Keep multiple cores busy on encryption and hashing
 - Reduce head-of-line stalls on lossy Wi-Fi
 - Allow independent writes to different offsets/files
 - Bound memory with fixed per-channel buffers
 
-The sender assigns 4 MiB chunks from an atomic queue. Each data channel authenticates with a random token issued only on the accepted control channel and bound to the mutual TLS identities.
+The sender picks the count from CPU cores and transfer size unless a fixed
+1–8 is configured. It assigns 4 MiB chunks from an atomic queue. Each data
+channel authenticates with a random token issued only on the accepted control
+channel and bound to the mutual TLS identities. A DATA frame is written as a
+20-byte frame header, 44-byte chunk header, and the file buffer directly to TLS,
+so the chunk is not copied into a second payload vector; the receiver reuses one
+chunk buffer per channel.
 
 ## File handling and performance
 
-- 4 MiB chunks; 4 data channels by default (configurable 1–8)
+- 4 MiB chunks; adaptive 2–6 data channels by default (configurable 1–8)
 - Sender reads source files with positioned reads; receiver writes with positioned writes
 - Per-chunk SHA-256 over the ciphertext-protected payload; corrupt chunks fail the transfer
 - Receiver preallocates the part file, writes out-of-order chunks, and renames only after all chunks are present
@@ -177,9 +191,11 @@ The sender assigns 4 MiB chunks from an atomic queue. Each data channel authenti
 
 On the development machine over loopback:
 
-- 128 MiB single file: ~77 MiB/s including TLS setup and process overhead
-- 17 MiB mixed file set with 40 small files: ~9 MiB/s, dominated by filesystem and Windows Defender churn
-- C# interop smoke test: 8 MiB in ~0.2-0.5 s (17-42 MiB/s across runs) including QR round-trip and first-byte progress verification
+- 128 MiB single file: ~77 MiB/s including TLS setup and process overhead (pre-0.3.0 CLI measurement)
+- 17 MiB mixed file set with 40 small files: ~12 MiB/s before the 0.3.0 pipeline changes, 14–15 MiB/s after
+- C# interop smoke test: 8 MiB at 25–28 MiB/s, including QR round-trip and first-byte progress verification
+
+See [transfer-performance.md](transfer-performance.md) for the change list and caveats.
 
 Real Wi-Fi throughput depends on AP, band, power saving, and storage. No benchmark claim is made beyond these local observations.
 

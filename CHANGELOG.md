@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.3.0 — 2026-10-27
+
+### Added
+
+- Android **Files** tab with All / Photos / Videos / Music / Docs filters over
+  the received-files folder, file counts and sizes, refresh, and empty states.
+- In-app Android media viewers:
+  - images with pinch zoom, pan, double-tap reset and EXIF rotation;
+  - video with play/pause, ±10-second skip, seek bar, 0.5×–2× speed, mute,
+    auto-hiding controls, a full-screen dialog and keep-screen-on;
+  - audio with seek, skip, speed and mute.
+- Transfer **History** rows now open the received file; multi-file transfers
+  show a file picker sheet. Non-media files open through a minimal FileProvider
+  in whichever installed app handles the MIME type.
+- Redesigned minimized transfer dock above the navigation bar: peer title,
+  percentage, live status/speed, expand-on-tap, a separate Cancel action, and
+  automatic dismissal after completion.
+- Adaptive parallel data channels: the sender chooses 2–6 TLS streams from CPU
+  cores and transfer size when the caller leaves the channel count at 0.
+- Zero-copy DATA framing and a reused receiver chunk buffer.
+- Channel-count diagnostics in the native log and transfer-performance notes.
+
+### Changed
+
+- `WispConfig.DataChannels` defaults to 0 (adaptive). An explicit 1–8 still
+  pins the channel count.
+- Android and Windows version metadata moved to 0.3.0; Android versionCode 4.
+
+### Fixed
+
+- A failed transfer no longer forces the sheet's progress bar to 100%.
+- The minimized transfer dock no longer sits over the navigation bar, no longer
+  stays at 100% forever, and keeps Cancel available only while a transfer is
+  active.
+
+### Performance
+
+- The native integration test improved from roughly 12.0 MiB/s to 14–15 MiB/s
+  on the same loopback workstation (mixed 17 MiB file set, including TLS setup).
+  The C# 8 MiB interop test measured 25–28 MiB/s. These are loopback numbers;
+  Wi-Fi results still need a two-device pass.
+
+### Documentation
+
+- New [files and media](docs/media-and-files.md) and
+  [transfer performance](docs/transfer-performance.md) notes, plus roadmap
+  ideas for on-device AI and zero-install receiving.
+
 ## 0.2.1 — 2026-10-27
 
 ### Fixed

@@ -14,10 +14,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>Wisp</AssemblyName>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
-    <Version>0.2.1</Version>
-    <AssemblyVersion>0.2.1.0</AssemblyVersion>
-    <FileVersion>0.2.1.0</FileVersion>
-    <InformationalVersion>0.2.1</InformationalVersion>
+    <Version>0.3.0</Version>
+    <AssemblyVersion>0.3.0.0</AssemblyVersion>
+    <FileVersion>0.3.0.0</FileVersion>
+    <InformationalVersion>0.3.0</InformationalVersion>
     <Company>SSM Limited</Company>
     <Product>Wisp</Product>
     <Description>Local-first file transfer for Windows and Android</Description>

@@ -16,6 +16,7 @@ development build; see the package manifests for the exact resolved versions.
 | ZXing.Net 0.16.11 | Barcode decode and encode core | Apache License 2.0 |
 | QRCoder 1.8.1 | Offline QR generation in the Android temporary-link sheet | MIT |
 | AndroidX CameraX (Camera2/Lifecycle/View) | Camera preview and frame analysis for ZXing.Net.Maui | Apache License 2.0 |
+| AndroidX Core / ExifInterface | FileProvider and EXIF rotation in the media viewer | Apache License 2.0 |
 
 ## Fonts and assets
 

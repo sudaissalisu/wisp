@@ -13,7 +13,7 @@ The repository contains a working end-to-end MVP:
 
 - WinUI 3 desktop app (C#) with taskbar tray icon, window/taskbar app icon, header activity gauge, UI sounds, and persistent transfer history
 - .NET MAUI Android app (C#), tested on a Samsung Galaxy S22 running Android 16: Material icon navigation, a floating pill nav, light/dark/system themes, Material SnackBar feedback, full runtime-permission prompts, an always-visible discovery foreground service, live progress + success/failure notifications with a monochrome Wisp shade icon, and a home-screen widget with nearby count, live progress, and a quick-send shortcut
-- AirDrop-style Android send sheet: sharing from Gallery/Files opens Wisp with a scanning nearby-device sheet; choosing a device sends immediately, and a live transfer sheet stays until 100% and can minimize to a progress pill + notification
+- AirDrop-style Android send sheet: sharing from Gallery/Files opens Wisp with a scanning nearby-device sheet; choosing a device sends immediately, and a live transfer sheet stays until 100% and can minimize to a floating progress dock + notification
 - Biometric protections on Android: optional confirmation before accepting files and optional app unlock, using Android BiometricPrompt with device-credential fallback
 - Categorized Android Settings (General / Transfer / Security / About) with appearance, sound, notification, receiving, permissions, identity, and trust controls
 - Android-to-Android temporary QR links that bypass shared Wi-Fi: the host opens a LocalOnlyHotspot and shows a QR code; the other phone scans it, joins with `WifiNetworkSpecifier`, binds the process to that network, and adds the host as a pinned peer in the existing transfer engine. The link is torn down and the previous Wi-Fi restored on Disconnect.
@@ -26,7 +26,20 @@ The repository contains a working end-to-end MVP:
 - Android back navigation closes the topmost sheet, leaves a Settings category,
   or returns to the previous tab before it can leave the app. Nearby is home, so
   back from Nearby exits.
-- A self-contained sideload APK (`dist/Wisp-android-0.2.1.apk`) with assemblies embedded for both arm64-v8a and x86_64
+- A **Files** tab for received files with All / Photos / Videos / Music / Docs
+  filters. Tapping media opens an in-app viewer: pinch-zoom and pan for images,
+  a video player with play/pause, ±10 s, seek, speed and mute, and an audio
+  player with the same transport controls. History rows open the files from that
+  transfer; other documents go to the system viewer through a FileProvider.
+- A redesigned minimized transfer dock above the nav bar: title, percentage,
+  live speed/status, expand-on-tap, separate Cancel, and automatic dismissal a
+  few seconds after completion.
+- A faster transfer path: DATA frames no longer copy each 4 MiB chunk into a
+  second payload vector, the receiver reuses its chunk buffer, and the sender
+  adapts its number of parallel TLS channels to CPU cores and transfer size.
+  The native loopback test improved from about 12 MiB/s to about 14–15 MiB/s
+  on this workstation; Wi-Fi gains depend on the link and device.
+- A self-contained sideload APK (`dist/Wisp-android-0.3.0.apk`) with assemblies embedded for both arm64-v8a and x86_64
 - Shared C++17 transfer engine compiled for Windows x64 and Android arm64-v8a / x86_64
 - TLS 1.3 transfer with mutual authentication, certificate pinning, and pairing codes
 - Parallel chunked transfers with per-chunk SHA-256 verification
@@ -186,6 +199,26 @@ The QR contains a random one-time token that the guest presents in its native
 [docs/qr-temporary-link.md](docs/qr-temporary-link.md) for the full flow,
 security properties, and test checklist.
 
+## Files and playback (Android)
+
+Every received file is kept in the app's Wisp folder and copied to
+`Downloads/Wisp`. The **Files** tab lists those files newest-first with
+All / Photos / Videos / Music / Docs filters.
+
+- **Images** open in a full-screen viewer with pinch zoom, pan, and
+  double-tap to reset.
+- **Videos** open in a player with play/pause, ±10-second skip, a draggable
+  seek bar, 0.5×–2× playback speed, mute, auto-hiding controls, and the screen
+  kept awake.
+- **Audio** opens in a matching player with seek, skip, speed, and mute.
+- **Other files** open in whichever installed app handles the type through a
+  FileProvider; Wisp does not need broad storage access.
+- In **Transfers → History**, tapping a received transfer opens its file, or
+  shows a file list when the transfer contained several files.
+
+The viewer is deliberately in-app and foreground-only: leaving Wisp stops
+playback rather than starting a background media session.
+
 ## Current limitations
 
 These are deliberately transparent rather than hidden:
@@ -203,6 +236,9 @@ These are deliberately transparent rather than hidden:
 - **Android app lock is cold-start/return based**, not a system-level app lock. It prompts on launch and after 20 seconds in the background when enabled.
 - **No automatic background acceptance.** An incoming transfer asks for consent while the app is running; long transfers get an Android foreground-service notification.
 - **Physical-device matrix is small.** Windows 11 x64 and one Samsung Galaxy S22 were used. No Windows ARM64 or Android table/emulator validation yet.
+- **Media playback uses the device codecs.** Video and audio formats the platform cannot decode fail with a readable message; there is no bundled software decoder. Playback is foreground-only, with no PiP, casting, subtitles, or background audio session yet.
+- **The Files tab is a received-files library, not a general file manager.** It lists the app's Wisp folder; files deleted there disappear from the list, and public `Downloads/Wisp` copies are managed by Android's MediaStore.
+- **Adaptive transfer channels are a heuristic.** The sender uses more parallel TLS streams for large files on CPUs with more cores, but the benefit depends on the Wi-Fi link, driver, and device thermals; a loopback measurement is not a Wi-Fi guarantee.
 
 ## Security
 
@@ -215,16 +251,18 @@ Please do not treat this MVP as independently audited cryptography or a finished
 Binaries are published as GitHub release assets because they are too large for
 the repository (the installer exceeds GitHub's normal file limit).
 
-- [Wisp v0.2.1 release](https://github.com/sudaissalisu/wisp/releases/tag/v0.2.1)
-- [Android APK](https://github.com/sudaissalisu/wisp/releases/download/v0.2.1/Wisp-android-0.2.1.apk) — debug-signed, universal
-- [Windows installer](https://github.com/sudaissalisu/wisp/releases/download/v0.2.1/Wisp-Setup-0.2.1.exe) — bundles the .NET and Windows App Runtime prerequisites
-- [Portable Windows build](https://github.com/sudaissalisu/wisp/releases/download/v0.2.1/Wisp-Windows-x64-0.2.1.zip) — requires both runtimes
-- [SHA256SUMS.txt](https://github.com/sudaissalisu/wisp/releases/download/v0.2.1/SHA256SUMS.txt) — checksums for all three assets
+- [Wisp v0.3.0 release](https://github.com/sudaissalisu/wisp/releases/tag/v0.3.0)
+- [Android APK](https://github.com/sudaissalisu/wisp/releases/download/v0.3.0/Wisp-android-0.3.0.apk) — debug-signed, universal
+- [Windows installer](https://github.com/sudaissalisu/wisp/releases/download/v0.3.0/Wisp-Setup-0.3.0.exe) — bundles the .NET and Windows App Runtime prerequisites
+- [Portable Windows build](https://github.com/sudaissalisu/wisp/releases/download/v0.3.0/Wisp-Windows-x64-0.3.0.zip) — requires both runtimes
+- [SHA256SUMS.txt](https://github.com/sudaissalisu/wisp/releases/download/v0.3.0/SHA256SUMS.txt) — checksums for all three assets
 
-Version 0.2.1 fixes Android back navigation (back now closes sheets and returns
-to Nearby before leaving the app) and stops trusted devices from being asked to
-compare the pairing code again. Version 0.2.0 added the Android temporary QR
-link, the QR-first send flow, disconnect controls, the SSM Limited About
+Version 0.3.0 adds the Files tab with image, video and audio players, opens
+received files from transfer history, redesigns the minimized transfer dock,
+and speeds up the native transfer path with zero-copy DATA framing, receive
+buffer reuse, and adaptive parallel channels. Version 0.2.1 fixed Android back
+navigation and trusted-device code prompts; 0.2.0 added the Android temporary
+QR link, the QR-first send flow, disconnect controls, the SSM Limited About
 screens, and the transfer-progress fix. The
 [v0.1.0 release](https://github.com/sudaissalisu/wisp/releases/tag/v0.1.0)
 remains available for the original build.
@@ -237,6 +275,8 @@ The Android APK is self-contained and does not need Fast Deployment.
 - [Architecture](docs/architecture.md)
 - [Protocol](docs/protocol.md)
 - [Android temporary QR link](docs/qr-temporary-link.md)
+- [Files and media playback](docs/media-and-files.md)
+- [Transfer performance](docs/transfer-performance.md)
 - [Threat model](docs/threat-model.md)
 - [Building](docs/building.md)
 - [Testing notes](docs/testing.md)

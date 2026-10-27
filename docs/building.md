@@ -84,7 +84,7 @@ installer bundles both.
 & "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer\wisp.iss
 ```
 
-Output: `dist/Wisp-Setup-0.2.1.exe`.
+Output: `dist/Wisp-Setup-0.3.0.exe`.
 
 The setup installs to `Program Files\Wisp`, creates Start Menu/optional desktop
 shortcuts, and registers an optional startup entry. It requests administrator
@@ -97,10 +97,10 @@ rights because the runtime installers require them.
 ### Portable zip
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools\pack-windows.ps1 -Version 0.2.1
+powershell -ExecutionPolicy Bypass -File tools\pack-windows.ps1 -Version 0.3.0
 ```
 
-Output: `dist/Wisp-Windows-x64-0.2.1.zip`. The script writes a real ZIP with
+Output: `dist/Wisp-Windows-x64-0.3.0.zip`. The script writes a real ZIP with
 forward-slash entry names. Do not use GNU tar's `-a` on Windows (it produces a
 tar archive even with a `.zip` name, which the 0.1.0 asset accidentally did) or
 `Compress-Archive` (backslash entry names).
@@ -109,7 +109,7 @@ tar archive even with a `.zip` name, which the 0.1.0 asset accidentally did) or
 
 ```powershell
 cd dist
-sha256sum Wisp-android-0.2.1.apk Wisp-Setup-0.2.1.exe Wisp-Windows-x64-0.2.1.zip > SHA256SUMS.txt
+sha256sum Wisp-android-0.3.0.apk Wisp-Setup-0.3.0.exe Wisp-Windows-x64-0.3.0.zip > SHA256SUMS.txt
 ```
 
 ## Android app

@@ -32,12 +32,59 @@ promises; they are engineering milestones.
 - Trusted devices are matched by their pinned TLS fingerprint and skip the
   pairing-code card on later transfers
 
+## Shipped in 0.3.0
+
+- Files tab with type filters over received files
+- Image viewer with zoom/pan, video player with speed/mute/skip, audio player
+- Open received files from transfer history
+- Redesigned minimized transfer dock
+- Zero-copy DATA framing, receive buffer reuse, adaptive parallel channels
+- FileProvider for opening non-media files in installed apps
+
+## Next: AI-era adoption
+
+The goal is to be the obvious local-transfer app, not an AI demo. These are
+ordered by adoption impact and privacy cost.
+
+1. **Zero-install browser receiver.** A phone or laptop that cannot install Wisp
+   opens a local HTTPS page (QR or short URL), pairs with a code, and sends or
+   receives through the browser. This removes the biggest adoption blocker: the
+   other person not having the app.
+2. **iOS client and web sender.** Same protocol surface as the browser receiver,
+   so mixed households and small teams do not need all-Android hardware.
+3. **On-device semantic Files search.** OCR document text and generate local
+   image/video embeddings with ML Kit or ONNX Runtime Mobile; search "invoice
+   from June" or "beach video" without uploading anything. Index only the Wisp
+   folder and keep the model on-device.
+4. **Voice-intent sending.** "Send the video I took yesterday to Sara" with
+   on-device speech recognition and a small intent parser, followed by the
+   normal confirmation sheet. Never auto-send from voice alone.
+5. **AI file actions, opt-in.** Summarize a PDF, transcribe an audio/video file
+   with whisper.cpp, extract text, suggest a filename/tag, and detect duplicates.
+   Run locally; show a clear "processed on this device" label.
+6. **Clipboard and link handoff.** A tiny text/link transfer path between trusted
+   devices, with an explicit "Send clipboard" action rather than silent sync.
+7. **Resume and reliability.** Persist chunk bitmaps next to `.part` files, resume
+   after a network drop or process death, and offer "send when charging".
+8. **Group receive rooms.** One host, several receivers for a photo dump, class,
+   or event; each receiver gets the same auth flow and progress.
+9. **Windows parity.** Files/media browsing and system-player handoff on Windows,
+   plus a Windows-hosted QR hotspot.
+10. **Optional encrypted relay.** A clearly separate, opt-in remote mode with
+    end-to-end keys for people who are not on the same network; never silently
+    enabled and never required for local transfers.
+
+Deliberately not doing: cloud accounts, silent analytics, uploading files to an
+AI service, or ads inside transfer flows. SSM Limited's privacy positioning is
+the product advantage.
+
 ## Next: personal-file polish
 
 - Per-file history entries with thumbnails
-- Android image viewer with swipe navigation
+- Swipe navigation between images and videos in the viewer
+- Subtitle track selection, picture-in-picture, and casting
+- Background audio playback with a media session
 - Windows media viewer/player
-- Open/reveal individual received files from history
 - Better notification text contrast on Android OEM skins
 - Verify biometric prompts with actual enrolled fingerprints
 

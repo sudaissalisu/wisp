@@ -2,13 +2,13 @@
 
 Wisp is a free, open-source utility, not an ad-first app. Ads must never sit
 between a user and a file transfer, and the open-source build must remain
-ad-free and fully functional. This document is a plan only: **0.2.1 ships with
+ad-free and fully functional. This document is a plan only: **0.3.0 ships with
 no ad SDK and no ad code.**
 
 ## Hard rules
 
 - No ads in the send sheet, accept dialog, transfer sheet, onboarding, QR flow,
-  share sheet, or foreground-service notification.
+  share sheet, Files library, media player, or foreground-service notification.
 - No interstitial or app-open ad on launch, after a transfer, or after a failed
   transfer.
 - No ad SDK initialization before the native engine is ready.

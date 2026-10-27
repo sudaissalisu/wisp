@@ -168,6 +168,32 @@ What was verified automatically:
   ACCESS_FINE_LOCATION, CHANGE_NETWORK_STATE, NEARBY_WIFI_DEVICES, and optional
   camera features
 
+### 0.3.0 build (2026-10-27)
+
+- Native engine rebuilt with zero-copy DATA frames, receiver buffer reuse and
+  adaptive channels. `wisp_native_tests` passed and averaged 14.6 MiB/s on the
+  17 MiB mixed set (12.1 MiB/s before); the C# smoke test passed at 25–28 MiB/s.
+- Android 0.3.0 (versionCode 4) built with the Files tab, native media dialogs,
+  FileProvider, history file opening and the new minimized dock.
+- Windows 0.3.0 built and launched; the native DLL and version metadata are
+  current.
+- No Android device was attached, so the new media UI has not been exercised on
+  hardware. Manual checklist:
+  1. Receive an image, a video, an audio file and a PDF; all four appear in Files.
+  2. Check each filter and the count/total-size summary.
+  3. Image: pinch, pan, double-tap, EXIF-rotated photo, rotation of the device.
+  4. Video: play/pause, seek, ±10 s, every speed step, mute, auto-hide, completion
+     rewind, backgrounding stops playback.
+  5. Audio: same transport controls and audio focus after dismissal.
+  6. PDF/doc: opens in an installed viewer through FileProvider without a storage
+     permission prompt.
+  7. History: single-file and multi-file transfer tap-to-open.
+  8. Minimize a transfer: dock shows title/percent/speed, sits above the nav bar,
+     Cancel works, completion auto-hides it, tap reopens the sheet.
+  9. Failed transfer shows a stopped state, not 100%.
+  10. Run a >100 MiB transfer and confirm the log reports the expected adaptive
+      channel count and the progress/notification stay live.
+
 ### 0.2.1 build (2026-10-27)
 
 - Android 0.2.1 (versionCode 3) and Windows 0.2.1 builds.
