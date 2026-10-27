@@ -2,7 +2,7 @@
 
 Wisp is a free, open-source utility, not an ad-first app. Ads must never sit
 between a user and a file transfer, and the open-source build must remain
-ad-free and fully functional. This document is a plan only: **0.2.0 ships with
+ad-free and fully functional. This document is a plan only: **0.2.1 ships with
 no ad SDK and no ad code.**
 
 ## Hard rules

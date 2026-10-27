@@ -25,6 +25,13 @@ promises; they are engineering milestones.
   header gauge from the first byte
 - SSM Limited About screens, MIT license, and an AdMob placement plan
 
+## Shipped in 0.2.1
+
+- Android back closes the topmost sheet, leaves a Settings category, or steps
+  back through tabs before it can leave the app
+- Trusted devices are matched by their pinned TLS fingerprint and skip the
+  pairing-code card on later transfers
+
 ## Next: personal-file polish
 
 - Per-file history entries with thumbnails

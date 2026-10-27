@@ -20,7 +20,13 @@ The repository contains a working end-to-end MVP:
 - A QR-first empty state and share sheet: when no nearby device appears, Wisp offers **Scan QR code** and **Create link**. Sharing files into Wisp and then scanning a code sends the staged files automatically once the private link connects.
 - An always-visible **Disconnect** action for an active temporary link, plus a LINK badge and summary on the Nearby page. Closing the link sheet leaves an established link running; disconnecting is explicit.
 - About screens identify Wisp as a project by SSM Limited and link to the MIT-licensed source.
-- A self-contained sideload APK (`dist/Wisp-android-0.2.0.apk`) with assemblies embedded for both arm64-v8a and x86_64
+- Trusted devices skip the six-digit code on later transfers; the pinned TLS
+  certificate fingerprint identifies the device. First contact still requires
+  comparing the code, and auto-accept remains opt-in.
+- Android back navigation closes the topmost sheet, leaves a Settings category,
+  or returns to the previous tab before it can leave the app. Nearby is home, so
+  back from Nearby exits.
+- A self-contained sideload APK (`dist/Wisp-android-0.2.1.apk`) with assemblies embedded for both arm64-v8a and x86_64
 - Shared C++17 transfer engine compiled for Windows x64 and Android arm64-v8a / x86_64
 - TLS 1.3 transfer with mutual authentication, certificate pinning, and pairing codes
 - Parallel chunked transfers with per-chunk SHA-256 verification
@@ -143,7 +149,10 @@ The APK includes the native engine for arm64-v8a and x86_64 when both `.so` file
 2. Wait for the other device to appear under **Nearby**. If the AP filters broadcast/multicast, Wisp's unicast subnet sweep finds it within a few seconds.
 3. On Windows, drag files onto a device card or use **Send files** / **Folder**. On Android, tap **Send** or share files into Wisp from another app.
 4. On first contact, compare the six-digit code shown on both devices before accepting.
-5. Choose **Trust this device** to pin its key. Trusted devices can be configured for auto-accept in Settings.
+5. Choose **Trust this device** to pin its key. Trusted devices skip the code
+   comparison on later transfers because the pinned TLS key already identifies
+   them; enable **Auto-accept trusted devices** in Settings to receive without a
+   prompt. First contact always shows the code.
 
 Default destinations:
 
@@ -206,14 +215,18 @@ Please do not treat this MVP as independently audited cryptography or a finished
 Binaries are published as GitHub release assets because they are too large for
 the repository (the installer exceeds GitHub's normal file limit).
 
-- [Wisp v0.2.0 release](https://github.com/sudaissalisu/wisp/releases/tag/v0.2.0)
-- [Android APK](https://github.com/sudaissalisu/wisp/releases/download/v0.2.0/Wisp-android-0.2.0.apk) — debug-signed, universal
-- [Windows installer](https://github.com/sudaissalisu/wisp/releases/download/v0.2.0/Wisp-Setup-0.2.0.exe) — bundles the .NET and Windows App Runtime prerequisites
-- [Portable Windows build](https://github.com/sudaissalisu/wisp/releases/download/v0.2.0/Wisp-Windows-x64-0.2.0.zip) — requires both runtimes
+- [Wisp v0.2.1 release](https://github.com/sudaissalisu/wisp/releases/tag/v0.2.1)
+- [Android APK](https://github.com/sudaissalisu/wisp/releases/download/v0.2.1/Wisp-android-0.2.1.apk) — debug-signed, universal
+- [Windows installer](https://github.com/sudaissalisu/wisp/releases/download/v0.2.1/Wisp-Setup-0.2.1.exe) — bundles the .NET and Windows App Runtime prerequisites
+- [Portable Windows build](https://github.com/sudaissalisu/wisp/releases/download/v0.2.1/Wisp-Windows-x64-0.2.1.zip) — requires both runtimes
+- [SHA256SUMS.txt](https://github.com/sudaissalisu/wisp/releases/download/v0.2.1/SHA256SUMS.txt) — checksums for all three assets
 
-Version 0.2.0 adds the Android temporary QR link, the QR-first send flow,
-disconnect controls, the SSM Limited About screens, and the transfer-progress
-fix. The [v0.1.0 release](https://github.com/sudaissalisu/wisp/releases/tag/v0.1.0)
+Version 0.2.1 fixes Android back navigation (back now closes sheets and returns
+to Nearby before leaving the app) and stops trusted devices from being asked to
+compare the pairing code again. Version 0.2.0 added the Android temporary QR
+link, the QR-first send flow, disconnect controls, the SSM Limited About
+screens, and the transfer-progress fix. The
+[v0.1.0 release](https://github.com/sudaissalisu/wisp/releases/tag/v0.1.0)
 remains available for the original build.
 
 The Windows installer requests administrator rights for the runtime installers.

@@ -65,7 +65,8 @@ Events are raised on native worker threads. The UIs must marshal them to their d
 - UDP discovery backed by a `WifiManager.MulticastLock`
 - Process network binding to the active Wi-Fi network so native sockets do not escape over cellular
 - Temporary QR links: `TemporaryHotspot` owns a LocalOnlyHotspot host, `TemporaryWifiLink` joins it with `WifiNetworkSpecifier` and binds the process, and `HotspotAddressResolver` finds the host IPv4 address from interfaces and `LinkProperties`. `QrCodeRenderer` uses QRCoder locally; ZXing.Net.Maui scans from an in-app camera sheet.
-- QR-first entry points in the empty Nearby state and the share sheet; a scanned link can send staged share files automatically. An active link stays up when its sheet is closed, with Open link and Disconnect actions on Nearby. The Android back button dismisses the topmost sheet before leaving the app.
+- QR-first entry points in the empty Nearby state and the share sheet; a scanned link can send staged share files automatically. An active link stays up when its sheet is closed, with Open link and Disconnect actions on Nearby. Back closes the topmost sheet, leaves a Settings category, or returns to the previous tab (Nearby is home) before the app can exit; `MainActivity` registers an AndroidX `OnBackPressedCallback` because .NET 10 MAUI does not route back to a root page's override.
+- Trusted devices are matched by the TLS fingerprint in the offer and skip the six-digit code on later transfers; first contact always shows it. Per-device auto-accept is opt-in on Windows, and Android uses the Settings master toggle for any trusted device.
 - The About screen identifies Wisp as a project by SSM Limited, shows the app version, and links to the MIT source and license.
 - Share-sheet receiver (`ACTION_SEND` / `ACTION_SEND_MULTIPLE`) and file picker staging
 - `WispForegroundService` keeps the process alive while a transfer is active

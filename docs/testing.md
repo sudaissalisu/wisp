@@ -168,6 +168,27 @@ What was verified automatically:
   ACCESS_FINE_LOCATION, CHANGE_NETWORK_STATE, NEARBY_WIFI_DEVICES, and optional
   camera features
 
+### 0.2.1 build (2026-10-27)
+
+- Android 0.2.1 (versionCode 3) and Windows 0.2.1 builds.
+- Back navigation is now registered through an AndroidX `OnBackPressedCallback`
+  in `MainActivity`, because .NET 10 MAUI does not invoke the root page's
+  `OnBackButtonPressed` override. Expected order: close link/share/offer/transfer
+  sheets → leave a Settings category → return to the previous tab (Nearby is
+  home) → exit.
+- Trusted devices skip the pairing-code card. The check compares the offer's TLS
+  certificate fingerprint with `trusted.json`; a changed key shows the code again.
+- No Android device was attached during this build. The back order and the
+  trusted-device sheet still need a physical pass:
+  1. Transfers → Settings → About → back returns to Settings; back again returns to
+   Transfers; back again returns to Nearby; back once more exits.
+  2. Scan sheet → back closes it without leaving Wisp.
+  3. Incoming offer → back declines and the sender stops waiting.
+  4. Active transfer sheet → back minimizes; the transfer keeps running.
+  5. Trust a device, send again, and confirm the next offer shows “Trusted
+     device — its key is already pinned” with no six-digit code.
+  6. Forget the device in Settings → Security and confirm the code returns.
+
 ### 0.2.0 release build (2026-10-27)
 
 - Native engine rebuilt for Windows x64, arm64-v8a, and x86_64; the native

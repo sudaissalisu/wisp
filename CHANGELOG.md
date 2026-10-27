@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.2.1 — 2026-10-27
+
+### Fixed
+
+- Android back navigation now closes the topmost sheet, leaves a Settings
+  category, or returns to the previous tab before Android can exit the app.
+  Nearby is the home tab, so back there exits. On .NET 10 MAUI the root page's
+  `OnBackButtonPressed` override is not reached, so the activity registers an
+  `OnBackPressedCallback` that delegates to the page.
+- Trusted devices no longer show the six-digit pairing code on later transfers.
+  Trust was keyed on the TLS certificate fingerprint, but the offer sheet always
+  displayed the code and the per-device auto-accept flag was never set. A
+  fingerprint match now shows a "trusted device" note instead; first contact
+  still requires comparing the code.
+- Android auto-accept now uses the Settings toggle for any trusted device
+  instead of an unreachable per-device flag.
+
+### Notes
+
+- No protocol or wire-format changes. 0.2.1 is compatible with 0.2.0 peers.
+
 ## 0.2.0 — 2026-10-27
 
 ### Added
