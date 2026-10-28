@@ -38,6 +38,17 @@ end (the host can be Android 8+, the scanner needs Android 10+). The Android
 build restores ZXing.Net.Maui.Controls, ZXing.Net, QRCoder, and the CameraX
 AndroidX packages from NuGet; no extra manual setup is required.
 
+## Browser link and voice parser smoke test
+
+```powershell
+dotnet run --project dotnet	ools\Wisp.BrowserSmoke\Wisp.BrowserSmoke.csproj -c Release
+```
+
+This runs the portable `BrowserLinkServer` on loopback and checks the embedded
+page, token rejection, a 1 MiB upload hash, file listing/download hashes, the
+text-to-clipboard event, and several voice phrases against a temporary library.
+It needs no Android device and no network beyond localhost.
+
 ## Native engine
 
 ```bat
@@ -84,7 +95,7 @@ installer bundles both.
 & "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer\wisp.iss
 ```
 
-Output: `dist/Wisp-Setup-0.3.0.exe`.
+Output: `dist/Wisp-Setup-0.4.0.exe`.
 
 The setup installs to `Program Files\Wisp`, creates Start Menu/optional desktop
 shortcuts, and registers an optional startup entry. It requests administrator
@@ -97,10 +108,10 @@ rights because the runtime installers require them.
 ### Portable zip
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools\pack-windows.ps1 -Version 0.3.0
+powershell -ExecutionPolicy Bypass -File tools\pack-windows.ps1 -Version 0.4.0
 ```
 
-Output: `dist/Wisp-Windows-x64-0.3.0.zip`. The script writes a real ZIP with
+Output: `dist/Wisp-Windows-x64-0.4.0.zip`. The script writes a real ZIP with
 forward-slash entry names. Do not use GNU tar's `-a` on Windows (it produces a
 tar archive even with a `.zip` name, which the 0.1.0 asset accidentally did) or
 `Compress-Archive` (backslash entry names).
@@ -109,7 +120,7 @@ tar archive even with a `.zip` name, which the 0.1.0 asset accidentally did) or
 
 ```powershell
 cd dist
-sha256sum Wisp-android-0.3.0.apk Wisp-Setup-0.3.0.exe Wisp-Windows-x64-0.3.0.zip > SHA256SUMS.txt
+sha256sum Wisp-android-0.4.0.apk Wisp-Setup-0.4.0.exe Wisp-Windows-x64-0.4.0.zip > SHA256SUMS.txt
 ```
 
 ## Android app

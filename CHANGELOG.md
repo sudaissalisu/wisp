@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.4.0 — 2026-10-27
+
+### Added
+
+- **Browser link** on Android: a local HTTP server and embedded offline page
+  that let any browser on the same Wi-Fi upload files, download received files,
+  and send a URL/text to the phone clipboard. No install, account, or cloud.
+  Includes a QR code, copy-link action, 30-minute inactivity expiry, explicit
+  Stop, multiple browser clients, upload progress, and export of uploads to
+  `Downloads/Wisp`.
+- **Ask Wisp voice commands**: Android speech capture plus a local parser for
+  phrases such as “Send the video from yesterday to Sara” and “Share the invoice
+  from June to John”. Wisp shows the matched file, target, and transcript and
+  waits for confirmation before sending.
+- **Files search** over file names, types, dates, and extracted text from
+  text-like documents. Supports month, today, yesterday, week, and month queries.
+- `LanAddress` fallback for Android builds where `NetworkInterface` does not
+  expose the Wi-Fi IPv4 address.
+- Portable `BrowserLinkServer`, `LibraryFile`, and `VoiceCommandParser` in
+  Wisp.Core; browser, library, and voice tests run without an Android device.
+
+### Changed
+
+- Android versionCode 5; both apps and the installer are 0.4.0.
+- Browser uploads use a dedicated single-file `Downloads/Wisp` export instead
+  of re-copying the whole received folder.
+- Files search rebuilt at scan time with a 16 KiB text sample per text-like file
+  and a 2 MiB index budget.
+
+### Security
+
+- Browser link uses a random 128-bit token on every request, binds to one LAN
+  address, enforces request/upload limits, sanitizes names and paths, and serves
+  a CSP-restricted embedded page. It is local HTTP, not Wisp TLS; the UI warns to
+  use a trusted Wi-Fi.
+
+### Not in this build
+
+- Native iOS client (the web page works in Safari).
+- OCR, image/video embeddings, PDF summaries, Whisper transcription, and other
+  model-dependent local AI actions.
+- Resume across process death, send-when-charging, native Wisp group rooms, and
+  an encrypted internet relay.
+
 ## 0.3.0 — 2026-10-27
 
 ### Added

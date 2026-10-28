@@ -41,38 +41,41 @@ promises; they are engineering milestones.
 - Zero-copy DATA framing, receive buffer reuse, adaptive parallel channels
 - FileProvider for opening non-media files in installed apps
 
+## Shipped in 0.4.0
+
+- Zero-install browser link: local HTTP page, QR/URL, upload/download/text,
+  multiple browsers, 30-minute inactivity expiry and explicit Stop
+- Web sender for iOS Safari and any other browser (no native iOS client yet)
+- Ask Wisp voice commands with local parsing and a mandatory confirmation sheet
+- Files search over names, types, dates, and extracted text from text-like docs
+- Browser-to-phone clipboard/link handoff
+
 ## Next: AI-era adoption
 
 The goal is to be the obvious local-transfer app, not an AI demo. These are
 ordered by adoption impact and privacy cost.
 
-1. **Zero-install browser receiver.** A phone or laptop that cannot install Wisp
-   opens a local HTTPS page (QR or short URL), pairs with a code, and sends or
-   receives through the browser. This removes the biggest adoption blocker: the
-   other person not having the app.
-2. **iOS client and web sender.** Same protocol surface as the browser receiver,
-   so mixed households and small teams do not need all-Android hardware.
-3. **On-device semantic Files search.** OCR document text and generate local
-   image/video embeddings with ML Kit or ONNX Runtime Mobile; search "invoice
-   from June" or "beach video" without uploading anything. Index only the Wisp
-   folder and keep the model on-device.
-4. **Voice-intent sending.** "Send the video I took yesterday to Sara" with
-   on-device speech recognition and a small intent parser, followed by the
-   normal confirmation sheet. Never auto-send from voice alone.
-5. **AI file actions, opt-in.** Summarize a PDF, transcribe an audio/video file
-   with whisper.cpp, extract text, suggest a filename/tag, and detect duplicates.
-   Run locally; show a clear "processed on this device" label.
-6. **Clipboard and link handoff.** A tiny text/link transfer path between trusted
-   devices, with an explicit "Send clipboard" action rather than silent sync.
-7. **Resume and reliability.** Persist chunk bitmaps next to `.part` files, resume
+1. **Native iOS client.** The browser page already covers iPhone users; a native
+   client needs Xcode/macOS and the same TLS protocol surface.
+2. **On-device OCR and semantic media search.** OCR documents and scanned PDFs,
+   then generate local image/video embeddings with ML Kit/ONNX Runtime Mobile.
+   Keep the index and model on-device; never upload pixels.
+3. **AI file actions, opt-in.** PDF summaries, whisper.cpp transcription,
+   suggested names/tags, and duplicate detection. Bundle the model or use a
+   platform on-device service, label it "processed on this device", and keep it
+   optional.
+4. **Resume and reliability.** Persist chunk bitmaps next to `.part` files, resume
    after a network drop or process death, and offer "send when charging".
-8. **Group receive rooms.** One host, several receivers for a photo dump, class,
-   or event; each receiver gets the same auth flow and progress.
-9. **Windows parity.** Files/media browsing and system-player handoff on Windows,
-   plus a Windows-hosted QR hotspot.
-10. **Optional encrypted relay.** A clearly separate, opt-in remote mode with
-    end-to-end keys for people who are not on the same network; never silently
-    enabled and never required for local transfers.
+5. **Native group rooms.** One host, several Wisp receivers for events/classes;
+   the browser link already allows multiple browser clients today.
+6. **Windows parity.** Files/media browsing, system-player handoff, and a
+   Windows-hosted browser/QR link.
+7. **Optional encrypted relay.** A separate opt-in remote mode with end-to-end
+   keys for people who are not on the same network; never silently enabled and
+   never required for local transfers.
+8. **Phone-to-browser clipboard and richer text handoff.** The current browser
+   page sends text/link to the phone; the reverse direction and a Wisp-to-Wisp
+   clipboard path remain.
 
 Deliberately not doing: cloud accounts, silent analytics, uploading files to an
 AI service, or ads inside transfer flows. SSM Limited's privacy positioning is

@@ -39,7 +39,16 @@ The repository contains a working end-to-end MVP:
   adapts its number of parallel TLS channels to CPU cores and transfer size.
   The native loopback test improved from about 12 MiB/s to about 14–15 MiB/s
   on this workstation; Wi-Fi gains depend on the link and device.
-- A self-contained sideload APK (`dist/Wisp-android-0.3.0.apk`) with assemblies embedded for both arm64-v8a and x86_64
+- **Browser link:** the phone serves an offline web page over the local network;
+  any iPhone, Android tablet, Windows PC, Mac, or Linux browser can upload files,
+  download received files, and send a link/text to the phone clipboard. No app
+  install, no cloud. Multiple browsers can use one link.
+- **Ask Wisp:** an Android voice command such as “Send the video from yesterday
+  to Sara” matches a received file and a nearby device, then shows a
+  confirmation sheet. The parser and confirmation are local.
+- **Files search:** names, types, dates, and extracted text from text-like
+  documents, with month/yesterday/today phrases. Media content is not analyzed.
+- A self-contained sideload APK (`dist/Wisp-android-0.4.0.apk`) with assemblies embedded for both arm64-v8a and x86_64
 - Shared C++17 transfer engine compiled for Windows x64 and Android arm64-v8a / x86_64
 - TLS 1.3 transfer with mutual authentication, certificate pinning, and pairing codes
 - Parallel chunked transfers with per-chunk SHA-256 verification
@@ -88,6 +97,7 @@ dotnet/src/Wisp.Core/   Shared C# models, native interop, trust/settings stores
 dotnet/src/Wisp.Windows WinUI 3 desktop app
 dotnet/src/Wisp.Android .NET MAUI Android app
 dotnet/tools/Wisp.Smoke C# native-interop smoke test
+dotnet/tools/Wisp.BrowserSmoke browser-link and voice-parser smoke test
 docs/                   Architecture, protocol, threat model, testing notes
 tools/                  Build/setup helpers
 ```
@@ -199,6 +209,34 @@ The QR contains a random one-time token that the guest presents in its native
 [docs/qr-temporary-link.md](docs/qr-temporary-link.md) for the full flow,
 security properties, and test checklist.
 
+### Browser link: no app required
+
+1. On the Android phone, tap **Browser link → Start browser link**. Wisp shows a
+   QR code and a URL for the phone's LAN address.
+2. On any other device on the same Wi-Fi, scan the QR or open the URL. Nothing
+   needs to be installed.
+3. The page can upload files to the phone, download files the phone has received,
+   and send a URL/text to the phone clipboard. Multiple browsers can use it at
+   once.
+4. Tap **Stop** on the phone when finished (or let it close after 30 quiet
+   minutes). Closing the sheet keeps it active; Stop is explicit.
+
+The browser page runs over local HTTP, not Wisp's pinned TLS transport. Use it on
+a trusted Wi-Fi and treat the link as a temporary password. See
+[docs/browser-link.md](docs/browser-link.md).
+
+### Ask Wisp and Files search
+
+- Tap **Ask Wisp → Speak** and say something like “Send the video from yesterday
+  to Sara”. Wisp matches a received file and a nearby device, then shows the
+  filename, target, and transcript for confirmation before sending.
+- In **Files**, search by name, type, date, or text. Examples: `invoice june`,
+  `video yesterday`, `beach`. The index covers text-like documents; it does not
+  analyze image or video pixels.
+
+Voice depends on Android's speech service and the `RECORD_AUDIO` permission. See
+[docs/voice-and-search.md](docs/voice-and-search.md).
+
 ## Files and playback (Android)
 
 Every received file is kept in the app's Wisp folder and copied to
@@ -240,6 +278,18 @@ These are deliberately transparent rather than hidden:
 - **The Files tab is a received-files library, not a general file manager.** It lists the app's Wisp folder; files deleted there disappear from the list, and public `Downloads/Wisp` copies are managed by Android's MediaStore.
 - **Adaptive transfer channels are a heuristic.** The sender uses more parallel TLS streams for large files on CPUs with more cores, but the benefit depends on the Wi-Fi link, driver, and device thermals; a loopback measurement is not a Wi-Fi guarantee.
 
+- **Browser link traffic is not Wisp TLS.** The zero-install page is served over
+  local HTTP so any browser can use it. The random link token is the access
+  control; use a trusted Wi-Fi and stop the link when done. The Android app is
+  the only host in this build.
+- **No native iOS app yet.** The browser page works on iPhone/iPad Safari; a
+  native iOS client needs Xcode/macOS and a separate implementation.
+- **AI file understanding is not bundled.** Files search covers names, types,
+  dates, and text-like documents; OCR, image/video embeddings, PDF summaries,
+  and Whisper transcription need on-device models that are not in this APK.
+- **No resume across process death, deferred transfers, Wisp group rooms, or
+  encrypted internet relay yet.** These remain roadmap items.
+
 ## Security
 
 Wisp uses TLS 1.3 with mutual certificates, a pinned peer fingerprint, and a six-digit short authentication string derived from the TLS exporter. Incoming paths are validated against traversal and Windows reserved names; manifests are bounded; files are staged and only finalized after all chunks verify. Android temporary-link QR codes carry the pinned fingerprint plus a random one-time token bound to the first guest identity; treat the QR as a temporary password. See [docs/threat-model.md](docs/threat-model.md) for the full model and residual risks.
@@ -251,21 +301,19 @@ Please do not treat this MVP as independently audited cryptography or a finished
 Binaries are published as GitHub release assets because they are too large for
 the repository (the installer exceeds GitHub's normal file limit).
 
-- [Wisp v0.3.0 release](https://github.com/sudaissalisu/wisp/releases/tag/v0.3.0)
-- [Android APK](https://github.com/sudaissalisu/wisp/releases/download/v0.3.0/Wisp-android-0.3.0.apk) — debug-signed, universal
-- [Windows installer](https://github.com/sudaissalisu/wisp/releases/download/v0.3.0/Wisp-Setup-0.3.0.exe) — bundles the .NET and Windows App Runtime prerequisites
-- [Portable Windows build](https://github.com/sudaissalisu/wisp/releases/download/v0.3.0/Wisp-Windows-x64-0.3.0.zip) — requires both runtimes
-- [SHA256SUMS.txt](https://github.com/sudaissalisu/wisp/releases/download/v0.3.0/SHA256SUMS.txt) — checksums for all three assets
+- [Wisp v0.4.0 release](https://github.com/sudaissalisu/wisp/releases/tag/v0.4.0)
+- [Android APK](https://github.com/sudaissalisu/wisp/releases/download/v0.4.0/Wisp-android-0.4.0.apk) — debug-signed, universal
+- [Windows installer](https://github.com/sudaissalisu/wisp/releases/download/v0.4.0/Wisp-Setup-0.4.0.exe) — bundles the .NET and Windows App Runtime prerequisites
+- [Portable Windows build](https://github.com/sudaissalisu/wisp/releases/download/v0.4.0/Wisp-Windows-x64-0.4.0.zip) — requires both runtimes
+- [SHA256SUMS.txt](https://github.com/sudaissalisu/wisp/releases/download/v0.4.0/SHA256SUMS.txt) — checksums for all three assets
 
-Version 0.3.0 adds the Files tab with image, video and audio players, opens
-received files from transfer history, redesigns the minimized transfer dock,
-and speeds up the native transfer path with zero-copy DATA framing, receive
-buffer reuse, and adaptive parallel channels. Version 0.2.1 fixed Android back
-navigation and trusted-device code prompts; 0.2.0 added the Android temporary
-QR link, the QR-first send flow, disconnect controls, the SSM Limited About
-screens, and the transfer-progress fix. The
-[v0.1.0 release](https://github.com/sudaissalisu/wisp/releases/tag/v0.1.0)
-remains available for the original build.
+Version 0.4.0 adds the zero-install browser link, Ask Wisp voice commands, and
+local Files search. Version 0.3.0 added the Files tab with image, video and audio
+players, opened received files from history, redesigned the minimized transfer
+dock, and sped up the native path with zero-copy DATA framing and adaptive
+channels. 0.2.1 fixed Android back navigation and trusted-device prompts; 0.2.0
+added the temporary QR link, QR-first send flow, disconnect controls, the SSM
+Limited About screens, and the progress fix.
 
 The Windows installer requests administrator rights for the runtime installers.
 The Android APK is self-contained and does not need Fast Deployment.
@@ -276,6 +324,8 @@ The Android APK is self-contained and does not need Fast Deployment.
 - [Protocol](docs/protocol.md)
 - [Android temporary QR link](docs/qr-temporary-link.md)
 - [Files and media playback](docs/media-and-files.md)
+- [Browser link](docs/browser-link.md)
+- [Voice commands and Files search](docs/voice-and-search.md)
 - [Transfer performance](docs/transfer-performance.md)
 - [Threat model](docs/threat-model.md)
 - [Building](docs/building.md)

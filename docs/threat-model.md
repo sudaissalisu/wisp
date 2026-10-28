@@ -71,6 +71,20 @@ Out of scope for now: internet relay, accounts, multi-user identity integration,
 
 **Residual:** anyone who can photograph the QR before it is used can join the hotspot and race the intended guest. They still need the pinned certificate fingerprint (present in the QR) or a different TLS endpoint would be rejected, and the token is one-time. Treat the QR like a temporary password and do not show it to bystanders. Stopping the link after the first transfer limits exposure.
 
+### Browser link observer
+
+**Capability:** obtains the browser-link URL/token, observes local Wi-Fi traffic, or uploads hostile content through the page.
+
+**Mitigations:**
+- The URL carries a random 128-bit token; every request is checked in constant time, and the server binds to one private LAN address.
+- The link expires after 30 minutes without a request and can be stopped explicitly. The app refuses to run a browser link and a temporary hotspot link at the same time.
+- Uploads are length-bounded, streamed to a `.part` file, given sanitized unique names, and only renamed after the complete body arrives. Downloads resolve only inside the received-files root.
+- Request headers are capped, HTML responses carry a restrictive Content-Security-Policy, and the page is embedded (no external scripts or CDNs).
+- The page and in-app sheet state that the browser link runs over local HTTP, not Wisp's TLS, and should be used on a trusted network.
+- Browser-uploaded files are treated like any received file: they appear in the Files library and are not executed by Wisp.
+
+**Residual:** anyone on the same Wi-Fi who has the URL can download received files and upload files while the link is open; a passive network observer can read the HTTP traffic. The token is a temporary password, not encryption. Do not use the browser link on public or untrusted Wi-Fi. A text sent through the page is placed on the phone clipboard; only use the link with people you trust.
+
 ### Malicious sender / malicious manifest
 
 **Capability:** sends crafted frames or a hostile file manifest.

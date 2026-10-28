@@ -42,6 +42,8 @@ Portable .NET 10 library shared by both UIs:
 - Trusted-device pin store (`trusted.json`)
 - Cross-platform settings store (`settings.json`)
 - Managed peer cache used by the UI
+- `BrowserLinkServer` (portable local HTTP server), its embedded offline page, and `NetworkAddress`
+- `LibraryFile` classification/scanning and `VoiceCommandParser`
 
 Events are raised on native worker threads. The UIs must marshal them to their dispatcher; both current apps do.
 
@@ -76,10 +78,37 @@ Events are raised on native worker threads. The UIs must marshal them to their d
 - `MediaViewer` runs native Android dialogs for images, video and audio: a zoomable image view, `VideoView` plus its underlying `MediaPlayer` for speed/mute, and a `MediaPlayer` audio player with audio focus. Leaving the app dismisses the viewer.
 - Transfer history rows open the received files; multi-file transfers show a relative-path picker. Non-media files are shared through a minimal FileProvider (`com.wisp.app.fileprovider`).
 - A floating minimized-transfer dock above the navigation bar shows title, percent, status/speed and Cancel, and expands back to the live sheet on tap.
+- Browser link: `BrowserLinkServer` binds to the phone's LAN IPv4, serves the embedded page/API, streams uploads into the received folder, and raises file/text events. QR + URL + 30-minute inactivity expiry + Stop.
+- Ask Wisp: `SpeechRecognizer` capture (prefer offline) feeds `VoiceCommandParser`, which matches a file by name/type/date and a peer by name; the page confirms before sending.
+- Files search: local name/type/date/text index built on scan; text samples from text-like documents only.
 - Share-sheet receiver (`ACTION_SEND` / `ACTION_SEND_MULTIPLE`) and file picker staging
 - `WispForegroundService` keeps the process alive while a transfer is active
 - Received files are written under the app-specific external directory and copied to `Downloads/Wisp` through MediaStore on Android 10+
 - Trusted devices and identity are visible in Settings
+
+## Browser link
+
+The zero-install path is deliberately a different transport from the native
+engine:
+
+```text
+Phone (host)                                  Browser (any OS)
+  │ bind LAN IPv4, random 128-bit token          │
+  │◄──────── GET /?t=… ──────────────────────────│  embedded page
+  │◄──────── POST /api/upload?t=…&name=… ─────────│  raw body -> .part -> rename
+  │───────── GET /api/files / download ─────────►│  received-files list
+  │◄──────── POST /api/text?t=… ─────────────────│  copy to clipboard
+```
+
+The server is in Wisp.Core and uses `TcpListener`/`NetworkStream` directly, not
+Kestrel/HttpListener. It handles one request per connection, caps headers and
+uploads, sanitizes names, checks path containment, and requires the token in
+constant time. The page is embedded and offline; no external assets are loaded.
+It is local HTTP rather than the pinned TLS engine, so the UI warns users to
+use a trusted Wi-Fi. The link expires after 30 minutes without a request.
+
+The same page is the web sender and works in iOS Safari; a native iOS client is
+not implemented.
 
 ## Temporary QR link
 

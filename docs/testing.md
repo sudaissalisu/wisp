@@ -168,6 +168,31 @@ What was verified automatically:
   ACCESS_FINE_LOCATION, CHANGE_NETWORK_STATE, NEARBY_WIFI_DEVICES, and optional
   camera features
 
+### 0.4.0 build (2026-10-27)
+
+- Wisp.Core gained a portable local HTTP server/page and the file/voice parsers.
+  `dotnet run --project dotnet/tools/Wisp.BrowserSmoke/Wisp.BrowserSmoke.csproj
+  -c Release` verified page serving, token rejection, 1 MiB upload hash, file
+  listing, download hash, text-to-clipboard event, and voice phrases
+  (“video from yesterday to Sara”, “invoice from June to John”, “song to Sara”,
+  unknown target rejection).
+- Android 0.4.0 (versionCode 5) built with Browser link, Ask Wisp, Files search,
+  RECORD_AUDIO, and the existing QR/Files/media features.
+- Windows 0.4.0 built and launches; it does not host a browser link yet.
+- No Android device was attached. Manual checklist:
+  1. Browser link QR loads on iPhone Safari and desktop Chrome; upload/download
+     progress and file hashes are correct.
+  2. Browser link text send lands on the Android clipboard.
+  3. Two browsers upload at once; Stop shows an expired page; 30-minute quiet
+     expiry works.
+  4. Ask Wisp: “send the video from yesterday to <device>” shows the right file
+     and target and waits for confirmation; deny microphone permission is
+     handled; no recognition service shows a readable message.
+  5. Files search: name, `video`, `yesterday`, `invoice june`, `beach`; empty
+     results show the search-specific empty state.
+  6. Temporary link and browser link refuse to run together.
+  7. Files/media/dock/history checks from the 0.3.0 list still pass.
+
 ### 0.3.0 build (2026-10-27)
 
 - Native engine rebuilt with zero-copy DATA frames, receiver buffer reuse and
