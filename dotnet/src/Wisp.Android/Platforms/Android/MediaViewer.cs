@@ -208,7 +208,7 @@ internal abstract class ViewerDialog : Dialog
         var contentId = Host.Resources?.GetIdentifier("content", "id", "android") ?? 0;
         if (contentId != 0 && decor.FindViewById(contentId) is global::Android.Views.View content)
         {
-            content.LayoutParameters = new ViewGroup.LayoutParams(
+            content.LayoutParameters = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent);
         }
     }

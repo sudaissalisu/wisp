@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.5.1 — 2026-10-28
+
+### Fixed
+
+- Media viewer crash on Android: the decor content view was assigned a base
+  `ViewGroup.LayoutParams`, but the decor FrameLayout requires
+  `MarginLayoutParams`. Opening a video/audio/image threw
+  `ClassCastException: ViewGroup$LayoutParams cannot be cast to
+  ViewGroup$MarginLayoutParams`. Use `FrameLayout.LayoutParams` for the content
+  and keep the 0.4.1 fullscreen sizing fix.
+
+### Device notes
+
+- 0.5.0's update check was verified on the Galaxy S22: About reported
+  “You’re on the latest version (0.5.0).”
+- 0.5.0 crashed when opening a video; the log pointed at the layout-params cast
+  above. 0.5.1 is built with the fix. The phone disconnected again before the
+  retest, so the final media check is still pending.
+
 ## 0.5.0 — 2026-10-28
 
 ### Added

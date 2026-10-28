@@ -53,7 +53,7 @@ The repository contains a working end-to-end MVP:
   prompt with Download / Later / Skip, and exposes a manual **Check** in the
   About section. No custom update server and no analytics; downloads open the
   signed APK or installer for a normal user-confirmed install.
-- A self-contained sideload APK (`dist/Wisp-android-0.5.0.apk`) with assemblies embedded for both arm64-v8a and x86_64
+- A self-contained sideload APK (`dist/Wisp-android-0.5.1.apk`) with assemblies embedded for both arm64-v8a and x86_64
 - Shared C++17 transfer engine compiled for Windows x64 and Android arm64-v8a / x86_64
 - TLS 1.3 transfer with mutual authentication, certificate pinning, and pairing codes
 - Parallel chunked transfers with per-chunk SHA-256 verification
@@ -306,13 +306,14 @@ Please do not treat this MVP as independently audited cryptography or a finished
 Binaries are published as GitHub release assets because they are too large for
 the repository (the installer exceeds GitHub's normal file limit).
 
-- [Wisp v0.5.0 release](https://github.com/sudaissalisu/wisp/releases/tag/v0.5.0)
-- [Android APK](https://github.com/sudaissalisu/wisp/releases/download/v0.5.0/Wisp-android-0.5.0.apk) — debug-signed, universal
-- [Windows installer](https://github.com/sudaissalisu/wisp/releases/download/v0.5.0/Wisp-Setup-0.5.0.exe) — bundles the .NET and Windows App Runtime prerequisites
-- [Portable Windows build](https://github.com/sudaissalisu/wisp/releases/download/v0.5.0/Wisp-Windows-x64-0.5.0.zip) — requires both runtimes
-- [SHA256SUMS.txt](https://github.com/sudaissalisu/wisp/releases/download/v0.5.0/SHA256SUMS.txt) — checksums for all three assets
+- [Wisp v0.5.1 release](https://github.com/sudaissalisu/wisp/releases/tag/v0.5.1)
+- [Android APK](https://github.com/sudaissalisu/wisp/releases/download/v0.5.1/Wisp-android-0.5.1.apk) — debug-signed, universal
+- [Windows installer](https://github.com/sudaissalisu/wisp/releases/download/v0.5.1/Wisp-Setup-0.5.1.exe) — bundles the .NET and Windows App Runtime prerequisites
+- [Portable Windows build](https://github.com/sudaissalisu/wisp/releases/download/v0.5.1/Wisp-Windows-x64-0.5.1.zip) — requires both runtimes
+- [SHA256SUMS.txt](https://github.com/sudaissalisu/wisp/releases/download/v0.5.1/SHA256SUMS.txt) — checksums for all three assets
 
-Version 0.5.0 adds in-app update checks against a GitHub-hosted manifest with
+Version 0.5.1 fixes the media-viewer crash found on device in 0.5.0. Version
+0.5.0 adds in-app update checks against a GitHub-hosted manifest with
 release notes, Later/Skip, and a manual Check in About. Version 0.4.1 fixed the
 media-viewer dialog sizing found on a phone. 0.4.0 added the zero-install
 browser link, Ask Wisp voice commands, and local Files search. Version 0.3.0 added the Files tab with image, video and audio

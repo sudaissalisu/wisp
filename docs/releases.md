@@ -4,6 +4,16 @@ Large binaries are not stored in Git. Build locally or download a release from:
 
 https://github.com/sudaissalisu/wisp/releases
 
+## 0.5.1
+
+- [Wisp-Setup-0.5.1.exe](https://github.com/sudaissalisu/wisp/releases/download/v0.5.1/Wisp-Setup-0.5.1.exe) — Windows 11 x64 installer; bundles the required .NET 10 Desktop Runtime and Windows App Runtime.
+- [Wisp-Windows-x64-0.5.1.zip](https://github.com/sudaissalisu/wisp/releases/download/v0.5.1/Wisp-Windows-x64-0.5.1.zip) — portable Windows build; requires both runtimes to be installed.
+- [Wisp-android-0.5.1.apk](https://github.com/sudaissalisu/wisp/releases/download/v0.5.1/Wisp-android-0.5.1.apk) — self-contained universal debug-signed APK for Android 8.0+ (arm64-v8a and x86_64).
+- [SHA256SUMS.txt](https://github.com/sudaissalisu/wisp/releases/download/v0.5.1/SHA256SUMS.txt) — checksums for the three assets above.
+
+0.5.1 fixes the Android media-viewer layout-params crash introduced by the
+0.4.1 fullscreen fix. It contains the 0.5.0 update checker unchanged.
+
 ## 0.5.0
 
 - [Wisp-Setup-0.5.0.exe](https://github.com/sudaissalisu/wisp/releases/download/v0.5.0/Wisp-Setup-0.5.0.exe) — Windows 11 x64 installer; bundles the required .NET 10 Desktop Runtime and Windows App Runtime.

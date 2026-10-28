@@ -168,6 +168,20 @@ What was verified automatically:
   ACCESS_FINE_LOCATION, CHANGE_NETWORK_STATE, NEARBY_WIFI_DEVICES, and optional
   camera features
 
+### 0.5.0 device pass and 0.5.1 fix (2026-10-28)
+
+- Installed 0.5.0 on the Galaxy S22 (Android 16). The About card showed
+  “You’re on the latest version (0.5.0)”, proving the real GitHub manifest
+  fetch, parsing and version comparison worked on-device.
+- Opening Skyfall crashed with
+  `ClassCastException: ViewGroup$LayoutParams cannot be cast to
+  ViewGroup$MarginLayoutParams`. The `OnStart` content-fill fix from 0.4.1 used
+  a base `ViewGroup.LayoutParams` on the decor content FrameLayout.
+- 0.5.1 replaces it with `FrameLayout.LayoutParams`. Built and packaged; the
+  phone disconnected before the retest. Re-run: open video, audio and image;
+  controls must sit at the bottom, the frame must be fullscreen/centered, and
+  the app must not crash.
+
 ### 0.5.0 build (2026-10-28)
 
 - `dotnet run --project dotnet/tools/Wisp.BrowserSmoke/Wisp.BrowserSmoke.csproj -c Release`
