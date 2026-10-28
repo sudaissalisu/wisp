@@ -59,6 +59,9 @@ public partial class MainPage : ContentPage
     private bool _browserLinkActive;
     private bool _browserLinkBusy;
     private bool _voiceListening;
+    private UpdateManifest? _updateManifest;
+    private bool _updateCheckBusy;
+    private bool _updateCheckedThisSession;
     private CameraBarcodeReaderView? _linkScanner;
     private QrLinkPayload? _activeLink;
     private PeerInfo? _linkPeer;
@@ -193,6 +196,7 @@ public partial class MainPage : ContentPage
         _ = ProcessSharedFilesAsync();
         await ProcessAppActionsAsync();
         if (_activeSection == "files") _ = RefreshLibraryAsync(force: true);
+        MaybeAutoCheckUpdates();
     }
 
     /// <summary>
@@ -203,6 +207,11 @@ public partial class MainPage : ContentPage
     public bool HandleBackNavigation()
     {
         if (_closing) return false;
+        if (UpdateOverlay.IsVisible)
+        {
+            CloseUpdateOverlay_Click(this, EventArgs.Empty);
+            return true;
+        }
         if (BrowserOverlay.IsVisible)
         {
             CloseBrowserOverlay_Click(this, EventArgs.Empty);
@@ -3180,6 +3189,152 @@ public partial class MainPage : ContentPage
         }
     }
 
+    // ── Updates ──────────────────────────────────────────────────────
+
+    private void MaybeAutoCheckUpdates()
+    {
+        if (_updateCheckedThisSession) return;
+        _updateCheckedThisSession = true;
+        var last = _settings.LastUpdateCheckUtc;
+        if (last is not null &&
+            DateTimeOffset.UtcNow - last.Value < TimeSpan.FromHours(24)) return;
+        _ = CheckForUpdatesAsync(manual: false);
+    }
+
+    private async void CheckForUpdates_Click(object? sender, EventArgs e) =>
+        await CheckForUpdatesAsync(manual: true);
+
+    private async Task CheckForUpdatesAsync(bool manual)
+    {
+        if (_updateCheckBusy) return;
+        _updateCheckBusy = true;
+        if (manual)
+        {
+            UpdateStatusLabel.Text = "Checking…";
+            ShowToast("Checking for updates…", IconInfo, durationSeconds: 3);
+        }
+        try
+        {
+            var current = AppInfo.Current.VersionString;
+            var result = await UpdateService.CheckAsync(current, "android");
+            if (result.Error is not null)
+            {
+                UpdateStatusLabel.Text = "Could not check for updates.";
+                if (manual)
+                    ShowToast(result.Error, IconError, error: true, durationSeconds: 7);
+                return;
+            }
+
+            _settings.LastUpdateCheckUtc = DateTimeOffset.UtcNow;
+            if (result.IsNewer && result.Manifest is not null)
+            {
+                var manifest = result.Manifest;
+                if (!manual && manifest.Latest.Equals(_settings.SkippedUpdateVersion,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    _updateManifest = null;
+                    UpdateBanner.IsVisible = false;
+                    UpdateStatusLabel.Text = $"Version {manifest.Latest} is skipped.";
+                    _settingsStore.Save(_settings);
+                    return;
+                }
+
+                _updateManifest = manifest;
+                UpdateBanner.IsVisible = true;
+                UpdateBannerLabel.Text = $"{manifest.Name}  ·  {current} → {manifest.Latest}";
+                UpdateStatusLabel.Text = $"Version {manifest.Latest} is available.";
+                UpdateSubtitleLabel.Text =
+                    $"Wisp {manifest.Latest} is ready. You have {current}.";
+                UpdateNotesLabel.Text = string.IsNullOrWhiteSpace(manifest.Notes)
+                    ? "See the release page for release notes." : manifest.Notes;
+                UpdateMetaLabel.Text = string.IsNullOrWhiteSpace(manifest.Published)
+                    ? "GitHub release" : $"Released {manifest.Published}";
+
+                var shouldPrompt = manual ||
+                    !manifest.Latest.Equals(_settings.PromptedUpdateVersion,
+                        StringComparison.OrdinalIgnoreCase);
+                if (shouldPrompt && (manual || (!HasActiveTransfers() &&
+                        !OfferOverlay.IsVisible && !TransferOverlay.IsVisible)))
+                {
+                    _settings.PromptedUpdateVersion = manifest.Latest;
+                    ShowUpdateOverlay();
+                }
+                if (manual)
+                    ShowToast($"Wisp {manifest.Latest} is available", IconInfo);
+            }
+            else
+            {
+                _updateManifest = null;
+                UpdateBanner.IsVisible = false;
+                UpdateStatusLabel.Text = $"You’re on the latest version ({current}).";
+                if (manual) ShowToast("You’re up to date", IconCheck);
+            }
+            _settingsStore.Save(_settings);
+        }
+        catch (Exception exception)
+        {
+            UpdateStatusLabel.Text = "Could not check for updates.";
+            if (manual) ShowToast(exception.Message, IconError, error: true);
+        }
+        finally
+        {
+            _updateCheckBusy = false;
+        }
+    }
+
+    private void ShowUpdateOverlay_Click(object? sender, EventArgs e)
+    {
+        if (_updateManifest is null) return;
+        ShowUpdateOverlay();
+    }
+
+    private void ShowUpdateOverlay()
+    {
+        if (_updateManifest is null) return;
+        UpdateOverlay.IsVisible = true;
+        UpdateOverlay.Opacity = 0;
+        _ = UpdateOverlay.FadeTo(1, 160, Easing.CubicOut);
+    }
+
+    private void CloseUpdateOverlay_Click(object? sender, EventArgs e)
+    {
+        UpdateOverlay.IsVisible = false;
+        UpdateOverlay.Opacity = 0;
+    }
+
+    private async void DownloadUpdate_Click(object? sender, EventArgs e)
+    {
+        if (_updateManifest is null) return;
+        var url = UpdateService.DownloadUrl(_updateManifest, "android");
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            ShowToast("The release has no download link yet.", IconInfo);
+            return;
+        }
+        try
+        {
+            await Launcher.Default.OpenAsync(url);
+            CloseUpdateOverlay_Click(sender, e);
+        }
+        catch (Exception exception)
+        {
+            ShowToast($"Could not open the download: {exception.Message}",
+                IconError, error: true);
+        }
+    }
+
+    private void SkipUpdate_Click(object? sender, EventArgs e)
+    {
+        if (_updateManifest is null) return;
+        _settings.SkippedUpdateVersion = _updateManifest.Latest;
+        _settingsStore.Save(_settings);
+        _updateManifest = null;
+        UpdateBanner.IsVisible = false;
+        UpdateStatusLabel.Text = $"Version {_settings.SkippedUpdateVersion} skipped.";
+        CloseUpdateOverlay_Click(sender, e);
+        ShowToast("This version will be skipped", IconInfo);
+    }
+
     private void OnboardingPermissions_Click(object sender, EventArgs e)
     {
         AndroidPermissions.RequestAll(force: true);
@@ -3199,6 +3354,7 @@ public partial class MainPage : ContentPage
         }
         _ = ProcessSharedFilesAsync();
         await ProcessAppActionsAsync();
+        MaybeAutoCheckUpdates();
     }
 
     // ── Settings categories ───────────────────────────────────────────

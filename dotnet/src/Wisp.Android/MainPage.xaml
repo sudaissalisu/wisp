@@ -49,6 +49,31 @@
             <ScrollView x:Name="NearbyScroll" VerticalScrollBarVisibility="Never">
                 <VerticalStackLayout Padding="18,4,18,26" Spacing="18">
 
+                    <!-- Update available banner -->
+                    <Border x:Name="UpdateBanner" IsVisible="False" Padding="14,11"
+                            BackgroundColor="{StaticResource MintSoft}"
+                            Stroke="{StaticResource MintBrush}" StrokeThickness="1"
+                            StrokeShape="RoundRectangle 18">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="11">
+                            <Border WidthRequest="36" HeightRequest="36" BackgroundColor="{StaticResource Mint}"
+                                    StrokeThickness="0" VerticalOptions="Center">
+                                <Border.StrokeShape><RoundRectangle CornerRadius="12" /></Border.StrokeShape>
+                                <Label FontFamily="MaterialIcons-Regular" Text="&#xE8D7;" FontSize="19"
+                                       TextColor="{StaticResource OnAccent}"
+                                       HorizontalOptions="Center" VerticalOptions="Center" />
+                            </Border>
+                            <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                <Label Text="Update available" FontFamily="OpenSansSemibold" FontSize="13"
+                                       TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                                <Label x:Name="UpdateBannerLabel" Text="" Style="{StaticResource TinyLabel}"
+                                       LineBreakMode="TailTruncation" />
+                            </VerticalStackLayout>
+                            <Button Grid.Column="2" Text="View" Style="{StaticResource PrimaryButton}"
+                                    HeightRequest="34" FontSize="12" Padding="14,0"
+                                    Clicked="ShowUpdateOverlay_Click" />
+                        </Grid>
+                    </Border>
+
                     <!-- Hero presence card -->
                     <Border Background="{StaticResource HeroGradient}"
                             StrokeThickness="1"
@@ -849,6 +874,19 @@
                             <Label Text="Wisp is free and open-source software. Files travel directly between your devices — no account, no cloud relay, no analytics. TLS 1.3 in transit and SHA-256 verification for every chunk."
                                    Style="{StaticResource TinyLabel}" />
                             <Label x:Name="AboutVersionLabel" Text="Version —" Style="{StaticResource TinyLabel}" />
+                            <Border Style="{StaticResource InnerCard}" Padding="12,10" Margin="0,2,0,2">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                    <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                                        <Label Text="Updates" Style="{StaticResource RowLabel}" />
+                                        <Label x:Name="UpdateStatusLabel"
+                                               Text="Wisp checks for a new release once a day."
+                                               Style="{StaticResource TinyLabel}" />
+                                    </VerticalStackLayout>
+                                    <Button Grid.Column="1" Text="Check" Style="{StaticResource SecondaryButton}"
+                                            HeightRequest="36" FontSize="12" Padding="14,0"
+                                            Clicked="CheckForUpdates_Click" />
+                                </Grid>
+                            </Border>
                             <Label Text="© 2026 SSM Limited. Released under the MIT License."
                                    Style="{StaticResource TinyLabel}" />
                             <Grid ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,4,0,0">
@@ -1349,6 +1387,50 @@
                                 Clicked="StopBrowserLink_Click" />
                     </Grid>
                     <Label Text="Local HTTP, not Wisp's TLS — use a trusted Wi-Fi. Anyone with the link can send or download while it is open. It closes after 30 minutes of quiet."
+                           Style="{StaticResource TinyLabel}" HorizontalTextAlignment="Center" />
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+
+        <!-- Update sheet -->
+        <Grid x:Name="UpdateOverlay" Grid.RowSpan="3" IsVisible="False"
+              BackgroundColor="#C40B0E12" ZIndex="23">
+            <Border VerticalOptions="End" Margin="14,0,14,18" Padding="20"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}"
+                    Stroke="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}"
+                    StrokeThickness="1" StrokeShape="RoundRectangle 30">
+                <VerticalStackLayout Spacing="13">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <VerticalStackLayout Spacing="2">
+                            <Label Text="Update available" Style="{StaticResource SectionLabel}" />
+                            <Label x:Name="UpdateSubtitleLabel" Text="A new Wisp release is ready."
+                                   Style="{StaticResource MutedLabel}" />
+                        </VerticalStackLayout>
+                        <Button Grid.Column="1" Text="&#xE5CD;" FontFamily="MaterialIcons-Regular"
+                                Style="{StaticResource GhostButton}" WidthRequest="42" Padding="0"
+                                Clicked="CloseUpdateOverlay_Click" AutomationProperties.Name="Close" />
+                    </Grid>
+                    <Border Style="{StaticResource InnerCard}" Padding="13,11">
+                        <VerticalStackLayout Spacing="5">
+                            <Label Text="WHAT'S NEW" Style="{StaticResource TinyLabel}" FontSize="9.5"
+                                   TextColor="{StaticResource Mint}" />
+                            <ScrollView MaximumHeightRequest="230" VerticalScrollBarVisibility="Never">
+                                <Label x:Name="UpdateNotesLabel" Text="" FontSize="12.5"
+                                       LineHeight="1.35"
+                                       TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                            </ScrollView>
+                        </VerticalStackLayout>
+                    </Border>
+                    <Label x:Name="UpdateMetaLabel" Text="" Style="{StaticResource TinyLabel}" />
+                    <Button Text="Download update" Style="{StaticResource PrimaryButton}"
+                            Clicked="DownloadUpdate_Click" />
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                        <Button Text="Later" Style="{StaticResource SecondaryButton}"
+                                Clicked="CloseUpdateOverlay_Click" />
+                        <Button Grid.Column="1" Text="Skip this version" Style="{StaticResource GhostButton}"
+                                FontSize="12" Clicked="SkipUpdate_Click" />
+                    </Grid>
+                    <Label Text="The download opens in your browser. Android may ask you to allow installs from that browser; enable it for the browser you use."
                            Style="{StaticResource TinyLabel}" HorizontalTextAlignment="Center" />
                 </VerticalStackLayout>
             </Border>
