@@ -186,6 +186,33 @@ internal abstract class ViewerDialog : Dialog
         Window?.SetLayout(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent);
     }
 
+    protected override void OnStart()
+    {
+        base.OnStart();
+        var window = Window;
+        if (window is null) return;
+        window.SetLayout(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent);
+        window.SetGravity(GravityFlags.Fill);
+        if (window.DecorView is not global::Android.Views.View decor) return;
+        decor.SetBackgroundColor(ViewerStyle.Background);
+        try
+        {
+            decor.SystemUiVisibility = (StatusBarVisibility)(
+                SystemUiFlags.LayoutStable | SystemUiFlags.LayoutFullscreen |
+                SystemUiFlags.Fullscreen | SystemUiFlags.HideNavigation |
+                SystemUiFlags.ImmersiveSticky);
+        }
+        catch
+        {
+        }
+        var contentId = Host.Resources?.GetIdentifier("content", "id", "android") ?? 0;
+        if (contentId != 0 && decor.FindViewById(contentId) is global::Android.Views.View content)
+        {
+            content.LayoutParameters = new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent);
+        }
+    }
+
     protected LinearLayout TopBar(string title)
     {
         var top = new LinearLayout(Host)

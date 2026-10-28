@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.4.1 — 2026-10-28
+
+### Fixed
+
+- Media viewer dialogs now force their content root to match the window. On the
+  Galaxy S22 the video was measured at its intrinsic height, so the frame sat at
+  the top of the screen and the seek/speed/mute controls were offscreen. The
+  dialog now fills the window, hides the system bars for video, and keeps the
+  controls at the bottom.
+
+### Notes
+
+- 0.4.0 was tested on a physical Galaxy S22 before this fix: browser link page,
+  token rejection, upload/download hash, Downloads/Wisp export, clipboard text,
+  Files search, browser overlay back behavior and Files-to-Nearby back navigation
+  all passed. The media-dialog fix is built in 0.4.1 but the phone disconnected
+  before the retest; verify the four bullet checks in `docs/testing.md`.
+
 ## 0.4.0 — 2026-10-27
 
 ### Added

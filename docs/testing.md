@@ -168,6 +168,48 @@ What was verified automatically:
   ACCESS_FINE_LOCATION, CHANGE_NETWORK_STATE, NEARBY_WIFI_DEVICES, and optional
   camera features
 
+### 0.4.0/0.4.1 device pass (2026-10-28)
+
+Device: Samsung Galaxy S22 (SM-S901U1), Android 16 / SDK 36, USB ADB.
+
+Passed on 0.4.0:
+
+- `adb install -r` of the signed universal APK; versionCode 5/versionName 0.4.0.
+- Light-theme Nearby page with Browser link and Ask Wisp cards; four-tab nav.
+- Browser link started on the phone (`192.168.1.189:43133`), QR rendered,
+  countdown displayed.
+- From the PC on the same Wi-Fi: page 200 (14,633 bytes), `/api/files` 200 with
+  the phone's name and two videos, wrong token 403.
+- 1 MiB PC upload 200; appeared in `/api/files`, app Files library, and
+  `/sdcard/Download/Wisp`; downloaded back and SHA-256 matched the uploaded file.
+- Browser `POST /api/text` returned 200; Android showed the system "Copied to
+  clipboard" toast, the app reported "Link or text copied to the clipboard", and
+  the sheet status showed "Text copied to this phone".
+- Browser overlay back button hid the sheet, kept the link active (LIVE card,
+  Open link/Stop), and showed the "stays active" toast.
+- Files search for `pc-test` returned the uploaded 1.0 MB file.
+- Back from Files returned to Nearby instead of exiting.
+- Video player opened and decoded Skyfall (frame visible). **Bug found:** the
+  dialog content measured at the video's intrinsic height, so the frame sat at
+  the top and the controls were offscreen.
+
+0.4.1 fix:
+
+- `ViewerDialog.OnStart` now sets the window/content to match-parent, sets Fill
+  gravity, hides system bars for the player, and forces the decor content view to
+  match-parent. Built and installed-worthy, but the phone disconnected before the
+  retest. Re-run the video/audio/image checks below and confirm the controls are
+  at the bottom and the frame is centered/fullscreen.
+
+Pending device checks:
+
+1. Video: controls visible at the bottom after opening/tapping, seek/speed/mute,
+   ±10 s, auto-hide, completion rewind, back closes the dialog.
+2. Image zoom/pan/EXIF; audio controls/focus.
+3. Ask Wisp microphone permission, a spoken command, confirmation, no auto-send.
+4. Browser Stop and 30-minute expiry; temporary link vs browser link conflict.
+5. Regression: QR temporary link, trusted device, dock progress.
+
 ### 0.4.0 build (2026-10-27)
 
 - Wisp.Core gained a portable local HTTP server/page and the file/voice parsers.
