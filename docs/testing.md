@@ -168,6 +168,21 @@ What was verified automatically:
   ACCESS_FINE_LOCATION, CHANGE_NETWORK_STATE, NEARBY_WIFI_DEVICES, and optional
   camera features
 
+### 0.5.0 build (2026-10-28)
+
+- `dotnet run --project dotnet/tools/Wisp.BrowserSmoke/Wisp.BrowserSmoke.csproj -c Release`
+  passed the existing browser/voice checks plus update manifest parsing,
+  `v`-prefix/equal/older version comparisons, HTTPS asset validation and
+  snake_case `android_url` mapping.
+- Android 0.5.0 (versionCode 7) and Windows 0.5.0 built and launched.
+- The Windows update prompt was prepared with a local manifest and
+  `WISP_UPDATE_MANIFEST_URL`; the prompt UI still needs a clean manual pass on
+  the phone/Windows.
+- On-device update checks: install 0.5.0; manual Check should report current.
+  To exercise the prompt, temporarily publish a manifest with a higher version
+  or use the Windows env override; then install the new build and confirm
+  current.
+
 ### 0.4.0/0.4.1 device pass (2026-10-28)
 
 Device: Samsung Galaxy S22 (SM-S901U1), Android 16 / SDK 36, USB ADB.

@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.5.0 — 2026-10-28
+
+### Added
+
+- In-app update checks on Android and Windows against a static HTTPS manifest at
+  `update.json` (GitHub raw). The request carries only the app version/platform
+  user agent; there is no custom update server or analytics.
+- Android **Update available** banner on Nearby and a release-notes sheet with
+  Download / Later / Skip this version; Windows About **Check** and a release
+  notes ContentDialog.
+- Manual **Check for updates** in Settings → About on both platforms; automatic
+  checks at most once per 24 hours.
+- `SKIPPED_UPDATE_VERSION` and once-per-version prompt state persisted in
+  settings.
+- Headless `UpdateService` tests for manifest parsing, version comparison, HTTPS
+  download validation and snake_case asset URLs.
+
+### Fixed
+
+- Update manifest asset URLs are mapped from `release_url`, `android_url`, and
+  `windows_url`; the initial camelCase-only parser would have silently lost all
+  download links.
+
+### Notes
+
+- 0.5.0 is the first build with the checker, so it will correctly report itself
+  as current. The prompt is exercised against a newer manifest or a test build.
+- Downloads open the signed APK/installer in the browser; Android requires the
+  user to allow installs from that browser. No silent install, delta update, or
+  mandatory enforcement.
+- The earlier media-dialog fix from 0.4.1 is included.
+
 ## 0.4.1 — 2026-10-28
 
 ### Fixed

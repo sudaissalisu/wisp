@@ -50,6 +50,12 @@ promises; they are engineering milestones.
 - Files search over names, types, dates, and extracted text from text-like docs
 - Browser-to-phone clipboard/link handoff
 
+## Shipped in 0.5.0
+
+- In-app update checks on Android and Windows against a GitHub-hosted JSON
+  manifest, release notes, Later/Skip, manual Check in About, and direct
+  APK/installer download links
+
 ## Next: AI-era adoption
 
 The goal is to be the obvious local-transfer app, not an AI demo. These are
@@ -106,7 +112,7 @@ the product advantage.
 
 - Quick Settings visibility tile backed by a persistent Android runtime service
 - Transfer resume across process restarts and network drops
-- Signed release APK/AAB, MSIX/Store packaging, auto-update
+- Signed release APK/AAB, MSIX/Store packaging
 - Android 17 local-network permission polish and a larger device matrix
 - 500 Mbps-class link utilization; 500 MB/s requires different hardware (Wi-Fi 7
   or a wired link), not merely a scheduling change

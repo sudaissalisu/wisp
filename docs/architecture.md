@@ -44,6 +44,7 @@ Portable .NET 10 library shared by both UIs:
 - Managed peer cache used by the UI
 - `BrowserLinkServer` (portable local HTTP server), its embedded offline page, and `NetworkAddress`
 - `LibraryFile` classification/scanning and `VoiceCommandParser`
+- `UpdateService`: fetch/parse the HTTPS `update.json` manifest, semantic version comparison, HTTPS download selection
 
 Events are raised on native worker threads. The UIs must marshal them to their dispatcher; both current apps do.
 
@@ -73,7 +74,8 @@ Events are raised on native worker threads. The UIs must marshal them to their d
 - Temporary QR links: `TemporaryHotspot` owns a LocalOnlyHotspot host, `TemporaryWifiLink` joins it with `WifiNetworkSpecifier` and binds the process, and `HotspotAddressResolver` finds the host IPv4 address from interfaces and `LinkProperties`. `QrCodeRenderer` uses QRCoder locally; ZXing.Net.Maui scans from an in-app camera sheet.
 - QR-first entry points in the empty Nearby state and the share sheet; a scanned link can send staged share files automatically. An active link stays up when its sheet is closed, with Open link and Disconnect actions on Nearby. Back closes the topmost sheet, leaves a Settings category, or returns to the previous tab (Nearby is home) before the app can exit; `MainActivity` registers an AndroidX `OnBackPressedCallback` because .NET 10 MAUI does not route back to a root page's override.
 - Trusted devices are matched by the TLS fingerprint in the offer and skip the six-digit code on later transfers; first contact always shows it. Per-device auto-accept is opt-in on Windows, and Android uses the Settings master toggle for any trusted device.
-- The About screen identifies Wisp as a project by SSM Limited, shows the app version, and links to the MIT source and license.
+- The About screen identifies Wisp as a project by SSM Limited, shows the app version, links to the MIT source and license, and exposes a manual update check.
+- Automatic update check at most once per 24 hours; Nearby banner and a release-notes sheet with Download/Later/Skip. The download opens the APK in the browser.
 - Files tab over the received-files folder with type filters, total count/size, and refresh-on-open/after-transfer.
 - `MediaViewer` runs native Android dialogs for images, video and audio: a zoomable image view, `VideoView` plus its underlying `MediaPlayer` for speed/mute, and a `MediaPlayer` audio player with audio focus. Leaving the app dismisses the viewer.
 - Transfer history rows open the received files; multi-file transfers show a relative-path picker. Non-media files are shared through a minimal FileProvider (`com.wisp.app.fileprovider`).
