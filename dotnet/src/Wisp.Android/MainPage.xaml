@@ -433,6 +433,7 @@
                             <Label FontFamily="MaterialIcons-Regular" Text="&#xE8B6;" FontSize="19"
                                    TextColor="{StaticResource Mint}" VerticalOptions="Center" />
                             <Entry x:Name="LibrarySearchEntry" Grid.Column="1"
+                                   Style="{StaticResource FormEntry}"
                                    Placeholder="Search names, types, dates, or text…"
                                    ClearButtonVisibility="WhileEditing"
                                    TextChanged="LibrarySearch_TextChanged" />
