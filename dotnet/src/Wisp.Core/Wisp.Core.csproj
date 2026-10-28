@@ -7,4 +7,7 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <RootNamespace>Wisp.Core</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="BrowserPage.html" />
+  </ItemGroup>
 </Project>

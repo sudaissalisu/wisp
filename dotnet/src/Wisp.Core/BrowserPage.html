@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b0e12">
+<title>Wisp · local transfer</title>
+<style>
+:root{
+  --bg:#0b0e12; --surface:#151a21; --surface2:#1c232c; --line:#2a333d;
+  --text:#f5f8f7; --muted:#9aa6a3; --mint:#45e3b4; --blue:#5b8def;
+  --pink:#ff7168; --shadow:0 18px 60px rgba(0,0,0,.45);
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,Ubuntu,sans-serif}
+body{position:relative;overflow-x:hidden}
+.glow{position:fixed;inset:-20% -10% auto;height:52vh;pointer-events:none;
+  background:radial-gradient(60% 70% at 20% 10%,rgba(69,227,180,.20),transparent 70%),
+             radial-gradient(55% 60% at 85% 0%,rgba(91,141,239,.18),transparent 70%);
+  filter:blur(12px)}
+main{position:relative;width:min(760px,100%);margin:0 auto;padding:28px 18px 40px}
+header{display:flex;align-items:center;gap:14px;margin:6px 0 22px}
+.logo{width:48px;height:48px;border-radius:16px;display:grid;place-items:center;
+  font-weight:800;font-size:22px;color:#08120f;
+  background:linear-gradient(135deg,var(--mint),var(--blue));box-shadow:var(--shadow)}
+.brand{font-weight:700;font-size:18px;letter-spacing:.2px}
+.sub{font-size:12px;color:var(--muted);margin-top:2px}
+.status{margin-left:auto;display:flex;align-items:center;gap:7px;font-size:12px;
+  color:var(--muted);background:var(--surface);border:1px solid var(--line);
+  padding:8px 11px;border-radius:999px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--mint);
+  box-shadow:0 0 0 4px rgba(69,227,180,.12)}
+.card{background:linear-gradient(180deg,rgba(255,255,255,.025),transparent),var(--surface);
+  border:1px solid var(--line);border-radius:24px;padding:18px;margin:0 0 14px;
+  box-shadow:var(--shadow)}
+h2{font-size:14px;margin:0;font-weight:600;letter-spacing:.2px}
+.hint{font-size:12px;color:var(--muted);line-height:1.5;margin:6px 0 0}
+.row{display:flex;align-items:center;gap:12px}
+.row .grow{flex:1}
+button{appearance:none;border:0;cursor:pointer;font:inherit;font-weight:600;
+  border-radius:14px;padding:12px 16px;background:var(--mint);color:#08120f;
+  transition:transform .12s ease,opacity .12s ease}
+button:hover{opacity:.92} button:active{transform:scale(.98)}
+button.ghost{background:transparent;color:var(--text);border:1px solid var(--line);
+  font-weight:500;padding:9px 12px;border-radius:12px}
+button.small{font-size:12px;padding:8px 11px}
+#drop{margin-top:14px;border:1.5px dashed #33404b;border-radius:18px;padding:26px 16px;
+  text-align:center;transition:border-color .15s ease,background .15s ease;cursor:pointer}
+#drop.over{border-color:var(--mint);background:rgba(69,227,180,.07)}
+#drop .big{font-size:15px;font-weight:600;margin-bottom:4px}
+#drop .tiny{font-size:12px;color:var(--muted)}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--mint);
+  background:rgba(69,227,180,.10);border:1px solid rgba(69,227,180,.22);
+  border-radius:999px;padding:5px 9px;margin-top:12px}
+#queue{display:grid;gap:8px;margin-top:12px}
+.upload{background:var(--surface2);border:1px solid var(--line);border-radius:14px;padding:11px 12px}
+.upload .top{display:flex;gap:10px;align-items:center;font-size:12px}
+.upload .name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.upload .pct{color:var(--mint);font-variant-numeric:tabular-nums}
+.bar{height:5px;background:#0e1318;border-radius:999px;overflow:hidden;margin-top:9px}
+.bar > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--mint),var(--blue));
+  border-radius:999px;transition:width .15s linear}
+.upload.done .pct{color:var(--mint)} .upload.bad .pct{color:var(--pink)}
+#files{display:grid;gap:8px;margin-top:14px;max-height:46vh;overflow:auto;padding-right:2px}
+.file{display:flex;align-items:center;gap:11px;background:var(--surface2);
+  border:1px solid var(--line);border-radius:14px;padding:10px}
+.ficon{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;
+  font-size:9px;font-weight:800;letter-spacing:.6px;background:rgba(69,227,180,.12);
+  color:var(--mint);flex:0 0 auto}
+.ficon.video{background:rgba(155,107,255,.13);color:#c7b5ff}
+.ficon.image{background:rgba(91,141,239,.13);color:#a9c2ff}
+.ficon.audio{background:rgba(255,154,98,.13);color:#ffbe9a}
+.ficon.document{background:rgba(255,209,102,.12);color:#ffe0a0}
+.fmeta{flex:1;min-width:0}
+.fname{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fsub{font-size:11px;color:var(--muted);margin-top:2px}
+.get{font-size:12px;color:var(--mint);text-decoration:none;border:1px solid rgba(69,227,180,.30);
+  padding:8px 11px;border-radius:11px;white-space:nowrap}
+.get:hover{background:rgba(69,227,180,.08)}
+.empty{padding:22px 8px;text-align:center;color:var(--muted);font-size:12px;line-height:1.6}
+textarea{width:100%;margin-top:12px;resize:vertical;min-height:74px;border-radius:14px;
+  border:1px solid var(--line);background:var(--surface2);color:var(--text);
+  padding:12px;font:inherit;font-size:14px;outline:none}
+textarea:focus{border-color:rgba(69,227,180,.55)}
+#sendText{margin-top:10px}
+footer{text-align:center;color:#6b7672;font-size:11px;line-height:1.7;margin-top:22px}
+.toast{position:fixed;left:50%;bottom:22px;transform:translate(-50%,16px);opacity:0;
+  background:var(--surface2);border:1px solid rgba(69,227,180,.35);color:var(--text);
+  padding:12px 16px;border-radius:14px;font-size:13px;box-shadow:var(--shadow);
+  transition:all .2s ease;pointer-events:none;z-index:50;max-width:90vw;text-align:center}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+@media (max-width:520px){
+  main{padding:20px 12px 30px}
+  .card{padding:15px;border-radius:20px}
+  .status{display:none}
+  header{gap:11px}
+  .logo{width:42px;height:42px;border-radius:14px}
+}
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<main>
+  <header>
+    <div class="logo">w</div>
+    <div>
+      <div class="brand">Wisp</div>
+      <div class="sub">Direct to <span id="device">this phone</span></div>
+    </div>
+    <div class="status"><span class="dot"></span><span id="statusText">Connected</span></div>
+  </header>
+
+  <section class="card">
+    <h2>Send to this phone</h2>
+    <div id="drop" role="button" tabindex="0">
+      <div class="big">Drop files here or tap to choose</div>
+      <div class="tiny">Photos, videos, documents, anything. No account, no cloud.</div>
+      <div class="pill">Same Wi-Fi · travels directly</div>
+    </div>
+    <input id="picker" type="file" multiple hidden>
+    <div id="queue"></div>
+  </section>
+
+  <section class="card">
+    <div class="row">
+      <h2 class="grow">Download from this phone</h2>
+      <button class="ghost small" id="refresh">Refresh</button>
+    </div>
+    <div class="hint">Files received on the phone, newest first.</div>
+    <div id="files"></div>
+  </section>
+
+  <section class="card">
+    <h2>Send a text or link</h2>
+    <div class="hint">Paste a URL, address, or note. It will be copied to the phone clipboard.</div>
+    <textarea id="text" placeholder="https://…"></textarea>
+    <button id="sendText">Send to phone</button>
+  </section>
+
+  <footer>
+    Local only · no cloud · no analytics<br>
+    This page runs over local HTTP, not Wisp's TLS. Use it on a trusted Wi-Fi.<br>
+    Anyone on this network with the link can send or download. Stop the link on the phone when done.
+  </footer>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+  var token = new URLSearchParams(location.search).get("t") || "";
+  var $ = function(id){ return document.getElementById(id); };
+  var api = function(path){ return path + (path.indexOf("?") < 0 ? "?" : "&") + "t=" + encodeURIComponent(token); };
+  var toastTimer = 0;
+
+  function toast(message){
+    var element = $("toast");
+    element.textContent = message;
+    element.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ element.classList.remove("show"); }, 3200);
+  }
+
+  function bytes(value){
+    if (!value) return "0 B";
+    var units = ["B","KB","MB","GB","TB"];
+    var i = 0;
+    var n = Number(value);
+    while (n >= 1024 && i < units.length - 1){ n /= 1024; i++; }
+    return (i === 0 ? n.toFixed(0) : n.toFixed(n >= 100 ? 0 : 1)) + " " + units[i];
+  }
+
+  function when(value){
+    var date = new Date(value);
+    if (isNaN(date.getTime())) return "";
+    var now = new Date();
+    var sameDay = date.toDateString() === now.toDateString();
+    if (sameDay) return "Today " + date.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+    var yesterday = new Date(now.getTime() - 86400000);
+    if (date.toDateString() === yesterday.toDateString())
+      return "Yesterday " + date.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+    return date.toLocaleDateString([], {month:"short", day:"numeric"}) + " " +
+      date.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+  }
+
+  function icon(kind){
+    if (kind === "video") return "VIDEO";
+    if (kind === "image") return "PHOTO";
+    if (kind === "audio") return "AUDIO";
+    if (kind === "document") return "DOC";
+    return "FILE";
+  }
+
+  function escapeHtml(value){
+    return String(value == null ? "" : value)
+      .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
+
+  function linkExpired(){
+    $("statusText").textContent = "Link expired";
+    $("files").innerHTML = '<div class="empty">This browser link is no longer active.<br>Create a new browser link on the phone.</div>';
+    toast("This link expired. Create a new one on the phone.");
+  }
+
+  function render(files){
+    var host = $("files");
+    if (!files || files.length === 0){
+      host.innerHTML = '<div class="empty">Nothing has arrived on the phone yet.<br>Send something from the picker above.</div>';
+      return;
+    }
+    var html = "";
+    files.forEach(function(file){
+      html += '<div class="file">' +
+        '<div class="ficon ' + escapeHtml(file.kind) + '">' + escapeHtml(icon(file.kind)) + '</div>' +
+        '<div class="fmeta">' +
+          '<div class="fname" title="' + escapeHtml(file.path) + '">' + escapeHtml(file.name) + '</div>' +
+          '<div class="fsub">' + bytes(file.size) + ' · ' + escapeHtml(when(file.modified)) + '</div>' +
+        '</div>' +
+        '<a class="get" href="' + api("/api/download") + '&path=' + encodeURIComponent(file.path) + '">Download</a>' +
+      '</div>';
+    });
+    host.innerHTML = html;
+  }
+
+  async function loadFiles(){
+    if (!token){ linkExpired(); return; }
+    try {
+      var response = await fetch(api("/api/files"), {cache:"no-store"});
+      if (!response.ok){ linkExpired(); return; }
+      var data = await response.json();
+      if (data.device) $("device").textContent = data.device;
+      $("statusText").textContent = "Connected";
+      render(data.files);
+    } catch (error) {
+      $("statusText").textContent = "Phone offline";
+      toast("Cannot reach the phone. Keep Wisp open and on the same Wi-Fi.");
+    }
+  }
+
+  function uploadFile(file){
+    var row = document.createElement("div");
+    row.className = "upload";
+    row.innerHTML = '<div class="top"><span class="name">' + escapeHtml(file.name) +
+      '</span><span class="pct">0%</span></div><div class="bar"><i></i></div>';
+    $("queue").prepend(row);
+    var pct = row.querySelector(".pct");
+    var bar = row.querySelector(".bar > i");
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", api("/api/upload") + "&name=" + encodeURIComponent(file.name), true);
+    xhr.upload.onprogress = function(event){
+      if (!event.lengthComputable) return;
+      var value = Math.round(event.loaded / event.total * 100);
+      pct.textContent = value + "%";
+      bar.style.width = value + "%";
+    };
+    xhr.onload = function(){
+      if (xhr.status === 200){
+        pct.textContent = "Sent";
+        bar.style.width = "100%";
+        row.classList.add("done");
+        setTimeout(function(){ loadFiles(); }, 350);
+      } else {
+        row.classList.add("bad");
+        pct.textContent = "Failed";
+        toast("Upload failed. The file may be too large.");
+      }
+    };
+    xhr.onerror = function(){
+      row.classList.add("bad");
+      pct.textContent = "Offline";
+      toast("Upload interrupted. Check the Wi-Fi connection.");
+    };
+    xhr.send(file);
+  }
+
+  function enqueue(list){
+    var files = Array.prototype.slice.call(list || []);
+    if (!files.length) return;
+    files.forEach(uploadFile);
+  }
+
+  var drop = $("drop");
+  var picker = $("picker");
+  drop.addEventListener("click", function(){ picker.click(); });
+  drop.addEventListener("keydown", function(event){
+    if (event.key === "Enter" || event.key === " "){ event.preventDefault(); picker.click(); }
+  });
+  picker.addEventListener("change", function(){ enqueue(picker.files); picker.value = ""; });
+  ["dragenter","dragover"].forEach(function(name){
+    drop.addEventListener(name, function(event){
+      event.preventDefault(); drop.classList.add("over");
+    });
+  });
+  ["dragleave","drop"].forEach(function(name){
+    drop.addEventListener(name, function(event){
+      event.preventDefault(); drop.classList.remove("over");
+    });
+  });
+  drop.addEventListener("drop", function(event){
+    if (event.dataTransfer && event.dataTransfer.files) enqueue(event.dataTransfer.files);
+  });
+  document.addEventListener("dragover", function(event){ event.preventDefault(); });
+  document.addEventListener("drop", function(event){ event.preventDefault(); });
+
+  $("refresh").addEventListener("click", loadFiles);
+  $("sendText").addEventListener("click", async function(){
+    var text = $("text").value.trim();
+    if (!text){ toast("Type or paste something first."); return; }
+    try {
+      var response = await fetch(api("/api/text"), {method:"POST", body:text});
+      if (response.ok){
+        $("text").value = "";
+        toast("Copied to the phone clipboard.");
+      } else {
+        toast("The phone did not accept that text.");
+      }
+    } catch (error) {
+      toast("Could not reach the phone.");
+    }
+  });
+
+  loadFiles();
+  setInterval(loadFiles, 8000);
+})();
+</script>
+</body>
+</html>
