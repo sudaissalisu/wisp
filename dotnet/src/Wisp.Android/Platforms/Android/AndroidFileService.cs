@@ -132,6 +132,31 @@ public static class AndroidFileService
         return exported > 0 ? "Downloads/Wisp" : null;
     }
 
+    /// <summary>Copies one received/browser-uploaded file into Downloads/Wisp.</summary>
+    public static async Task<bool> ExportFileToDownloadsAsync(string source)
+    {
+        if (Build.VERSION.SdkInt < BuildVersionCodes.Q || !File.Exists(source)) return false;
+        try
+        {
+            var values = new ContentValues();
+            values.Put(MediaStore.IMediaColumns.DisplayName, Path.GetFileName(source));
+            values.Put(MediaStore.IMediaColumns.MimeType, MimeTypeOf(source));
+            values.Put(MediaStore.IMediaColumns.RelativePath,
+                $"{AndroidEnvironment.DirectoryDownloads}/Wisp");
+            var uri = Context.ContentResolver!.Insert(MediaStore.Downloads.ExternalContentUri!, values);
+            if (uri is null) return false;
+            await using var input = File.OpenRead(source);
+            await using var output = Context.ContentResolver.OpenOutputStream(uri);
+            if (output is null) return false;
+            await input.CopyToAsync(output);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     /// <summary>
     /// Opens a received file in whichever installed app handles its MIME type.
     /// Files live in app-private external storage, so the URI must come from the

@@ -140,6 +140,74 @@
                         </VerticalStackLayout>
                     </Border>
 
+                    <!-- Browser link: any device, no install -->
+                    <Border Style="{StaticResource SurfaceCard}" Padding="16">
+                        <VerticalStackLayout Spacing="11">
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                                <Border WidthRequest="40" HeightRequest="40" BackgroundColor="{StaticResource MintSoft}"
+                                        StrokeThickness="0" VerticalOptions="Center">
+                                    <Border.StrokeShape>
+                                        <RoundRectangle CornerRadius="13" />
+                                    </Border.StrokeShape>
+                                    <Label FontFamily="MaterialIcons-Regular" Text="&#xE80B;" FontSize="21"
+                                           TextColor="{StaticResource Mint}" HorizontalOptions="Center"
+                                           VerticalOptions="Center" />
+                                </Border>
+                                <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                    <Label Text="Browser link" FontFamily="OpenSansSemibold" FontSize="14.5"
+                                           TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                                    <Label x:Name="BrowserCardHintLabel"
+                                           Text="Any phone, tablet, or laptop on this Wi-Fi. No install needed."
+                                           Style="{StaticResource TinyLabel}" />
+                                </VerticalStackLayout>
+                                <Label x:Name="BrowserActiveBadge" Grid.Column="2" Text="LIVE" IsVisible="False"
+                                       FontFamily="OpenSansSemibold" FontSize="9.5" TextColor="{StaticResource OnAccent}"
+                                       BackgroundColor="{StaticResource Mint}" Padding="7,4"
+                                       VerticalOptions="Center" />
+                            </Grid>
+                            <Label x:Name="BrowserSummaryLabel" IsVisible="False" Style="{StaticResource TinyLabel}"
+                                   TextColor="{StaticResource Mint}" />
+                            <Button x:Name="BrowserStartButton" Text="Start browser link"
+                                    Style="{StaticResource PrimaryButton}" HeightRequest="42" FontSize="13"
+                                    Clicked="CreateBrowserLink_Click" />
+                            <Grid x:Name="BrowserActiveActions" IsVisible="False"
+                                  ColumnDefinitions="*,*" ColumnSpacing="8">
+                                <Button Text="Open link" Style="{StaticResource PrimaryButton}"
+                                        HeightRequest="42" FontSize="13" Clicked="OpenBrowserLink_Click" />
+                                <Button Grid.Column="1" Text="Stop" Style="{StaticResource SecondaryButton}"
+                                        HeightRequest="42" FontSize="13" Clicked="StopBrowserLink_Click" />
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <!-- Voice command -->
+                    <Border Style="{StaticResource SurfaceCard}" Padding="16">
+                        <VerticalStackLayout Spacing="9">
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                                <Border WidthRequest="40" HeightRequest="40" BackgroundColor="{StaticResource MintSoft}"
+                                        StrokeThickness="0" VerticalOptions="Center">
+                                    <Border.StrokeShape>
+                                        <RoundRectangle CornerRadius="13" />
+                                    </Border.StrokeShape>
+                                    <Label FontFamily="MaterialIcons-Regular" Text="&#xE029;" FontSize="21"
+                                           TextColor="{StaticResource Mint}" HorizontalOptions="Center"
+                                           VerticalOptions="Center" />
+                                </Border>
+                                <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                    <Label Text="Ask Wisp" FontFamily="OpenSansSemibold" FontSize="14.5"
+                                           TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                                    <Label Text="Speak a send command. Wisp always confirms before sending."
+                                           Style="{StaticResource TinyLabel}" />
+                                </VerticalStackLayout>
+                                <Button Grid.Column="2" Text="Speak" Style="{StaticResource PrimaryButton}"
+                                        HeightRequest="38" FontSize="12" Clicked="VoiceSend_Click" />
+                            </Grid>
+                            <Label x:Name="VoiceHintLabel"
+                                   Text="Try: “Send the video from yesterday to Sara”"
+                                   Style="{StaticResource TinyLabel}" />
+                        </VerticalStackLayout>
+                    </Border>
+
                     <Grid ColumnDefinitions="*,Auto">
                         <Label Text="Nearby devices" Style="{StaticResource SectionLabel}" VerticalOptions="Center" />
                         <Label x:Name="PeerCountLabel" Grid.Column="1" Text="Looking around…"
@@ -359,6 +427,17 @@
                         <Button Grid.Column="1" Text="Refresh" Style="{StaticResource GhostButton}"
                                 Clicked="RefreshLibrary_Click" VerticalOptions="End" />
                     </Grid>
+
+                    <Border Style="{StaticResource SurfaceCard}" Padding="12,4">
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                            <Label FontFamily="MaterialIcons-Regular" Text="&#xE8B6;" FontSize="19"
+                                   TextColor="{StaticResource Mint}" VerticalOptions="Center" />
+                            <Entry x:Name="LibrarySearchEntry" Grid.Column="1"
+                                   Placeholder="Search names, types, dates, or text…"
+                                   ClearButtonVisibility="WhileEditing"
+                                   TextChanged="LibrarySearch_TextChanged" />
+                        </Grid>
+                    </Border>
 
                     <Border Style="{StaticResource SurfaceCard}" Padding="14">
                         <VerticalStackLayout Spacing="11">
@@ -1211,6 +1290,65 @@
                                     Clicked="DisconnectTemporaryLink_Click" />
                         </Grid>
                     </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+
+        <!-- Browser link sheet -->
+        <Grid x:Name="BrowserOverlay" Grid.RowSpan="3" IsVisible="False"
+              BackgroundColor="#C40B0E12" ZIndex="19">
+            <Border VerticalOptions="End" Margin="14,0,14,18" Padding="20"
+                    BackgroundColor="{AppThemeBinding Light={StaticResource SurfaceLight}, Dark={StaticResource SurfaceDark}}"
+                    Stroke="{AppThemeBinding Light={StaticResource LineLight}, Dark={StaticResource LineDark}}"
+                    StrokeThickness="1" StrokeShape="RoundRectangle 30">
+                <VerticalStackLayout Spacing="13">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <VerticalStackLayout Spacing="2">
+                            <Label Text="Browser link" Style="{StaticResource SectionLabel}" />
+                            <Label x:Name="BrowserSubtitleLabel"
+                                   Text="Open this on any device. No install."
+                                   Style="{StaticResource MutedLabel}" />
+                        </VerticalStackLayout>
+                        <Button Grid.Column="1" Text="&#xE5CD;" FontFamily="MaterialIcons-Regular"
+                                Style="{StaticResource GhostButton}" WidthRequest="42" Padding="0"
+                                Clicked="CloseBrowserOverlay_Click" AutomationProperties.Name="Close" />
+                    </Grid>
+
+                    <Border BackgroundColor="White" Padding="10" Stroke="{StaticResource MintBrush}"
+                            StrokeThickness="1" StrokeShape="RoundRectangle 20"
+                            HorizontalOptions="Center">
+                        <Image x:Name="BrowserQrImage" WidthRequest="222" HeightRequest="222"
+                               Aspect="AspectFit" />
+                    </Border>
+
+                    <Border Style="{StaticResource InnerCard}" Padding="13,11">
+                        <VerticalStackLayout Spacing="4">
+                            <Label Text="OPEN THIS LINK" Style="{StaticResource TinyLabel}"
+                                   FontSize="9.5" TextColor="{StaticResource Mint}" />
+                            <Label x:Name="BrowserUrlLabel" Text="—" FontSize="11.5"
+                                   LineBreakMode="CharacterWrap"
+                                   TextColor="{AppThemeBinding Light={StaticResource TextLight}, Dark={StaticResource TextDark}}" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Label Text="Any phone, tablet, Mac, Windows PC, or Linux machine on this Wi-Fi can send or download files from this page."
+                           Style="{StaticResource TinyLabel}" />
+                    <HorizontalStackLayout Spacing="9" VerticalOptions="Center">
+                        <ActivityIndicator x:Name="BrowserWaitSpinner" IsRunning="True"
+                                           Color="{StaticResource Mint}" WidthRequest="17" HeightRequest="17" />
+                        <Label x:Name="BrowserStatusLabel" Text="Waiting for a browser…"
+                               Style="{StaticResource TinyLabel}" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+                    <Label x:Name="BrowserExpiryLabel" Text="" Style="{StaticResource TinyLabel}"
+                           TextColor="{StaticResource Mint}" />
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                        <Button Text="Copy link" Style="{StaticResource PrimaryButton}"
+                                Clicked="CopyBrowserLink_Click" />
+                        <Button Grid.Column="1" Text="Stop" Style="{StaticResource SecondaryButton}"
+                                Clicked="StopBrowserLink_Click" />
+                    </Grid>
+                    <Label Text="Local HTTP, not Wisp's TLS — use a trusted Wi-Fi. Anyone with the link can send or download while it is open. It closes after 30 minutes of quiet."
+                           Style="{StaticResource TinyLabel}" HorizontalTextAlignment="Center" />
                 </VerticalStackLayout>
             </Border>
         </Grid>

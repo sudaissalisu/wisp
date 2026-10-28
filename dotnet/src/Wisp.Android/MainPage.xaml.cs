@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Security.Cryptography;
+using System.Text;
 using Android.Content;
 using Android.Content.PM;
 using Android.Net;
@@ -50,6 +51,14 @@ public partial class MainPage : ContentPage
     private CancellationTokenSource? _pulseCts;
     private TemporaryHotspot? _temporaryHotspot;
     private TemporaryWifiLink? _temporaryWifiLink;
+    private BrowserLinkServer? _browserServer;
+    private IDispatcherTimer? _browserExpiryTimer;
+    private DateTimeOffset _browserExpiresAt;
+    private string? _browserUrl;
+    private int _browserFilesReceived;
+    private bool _browserLinkActive;
+    private bool _browserLinkBusy;
+    private bool _voiceListening;
     private CameraBarcodeReaderView? _linkScanner;
     private QrLinkPayload? _activeLink;
     private PeerInfo? _linkPeer;
@@ -72,7 +81,9 @@ public partial class MainPage : ContentPage
     private string _settingsCategory = "general";
     private readonly List<string> _pendingSharePaths = [];
     private List<LibraryFile> _librarySnapshot = [];
+    private Dictionary<string, string> _textIndex = new(StringComparer.OrdinalIgnoreCase);
     private string _libraryFilter = "all";
+    private string _librarySearch = "";
     private bool _libraryLoading;
     private CancellationTokenSource? _miniDockHide;
     private int _miniDockToken;
@@ -127,6 +138,7 @@ public partial class MainPage : ContentPage
         RefreshHistory();
         SetSectionInitial();
         UpdatePeerUi();
+        UpdateBrowserCard();
 
         ShareInbox.Changed += OnShareInboxChanged;
         AppActionInbox.Changed += OnAppActionChanged;
@@ -191,6 +203,11 @@ public partial class MainPage : ContentPage
     public bool HandleBackNavigation()
     {
         if (_closing) return false;
+        if (BrowserOverlay.IsVisible)
+        {
+            CloseBrowserOverlay_Click(this, EventArgs.Empty);
+            return true;
+        }
         if (LinkOverlay.IsVisible)
         {
             CloseTemporaryLink_Click(this, EventArgs.Empty);
@@ -255,6 +272,7 @@ public partial class MainPage : ContentPage
     {
         if (_closing) return;
         _closing = true;
+        StopBrowserLinkInternal(notify: false);
         MediaViewer.DismissCurrent();
         CancelMiniDockHide();
         ShareInbox.Changed -= OnShareInboxChanged;
@@ -858,6 +876,7 @@ public partial class MainPage : ContentPage
         try
         {
             _librarySnapshot = await LibraryFile.ScanAsync(_settings.SaveDirectory);
+            await BuildTextIndexAsync(_librarySnapshot);
             ApplyLibraryFilter();
         }
         catch (Exception exception)
@@ -876,6 +895,7 @@ public partial class MainPage : ContentPage
         Library.Clear();
         var filtered = _librarySnapshot
             .Where(LibraryMatches)
+            .Where(file => MatchesSearch(file, _librarySearch))
             .ToList();
         foreach (var file in filtered) Library.Add(file);
         var total = filtered.Sum(file => file.Size);
@@ -886,10 +906,14 @@ public partial class MainPage : ContentPage
         LibraryEmpty.IsVisible = filtered.Count == 0;
         LibraryEmptyTitleLabel.Text = _librarySnapshot.Count == 0
             ? "No files here yet"
-            : "Nothing matches this filter";
+            : string.IsNullOrWhiteSpace(_librarySearch)
+                ? "Nothing matches this filter"
+                : "Nothing matches this search";
         LibraryEmptyBodyLabel.Text = _librarySnapshot.Count == 0
             ? "Received photos, videos, music, and documents appear in this tab."
-            : "Try another filter, or refresh after the next transfer finishes.";
+            : string.IsNullOrWhiteSpace(_librarySearch)
+                ? "Try another filter, or refresh after the next transfer finishes."
+                : "Try a different word, a type like “video”, or a date like “yesterday”.";
         RefreshLibraryChips();
     }
 
@@ -901,6 +925,149 @@ public partial class MainPage : ContentPage
         "document" => file.Kind == LibraryKind.Document,
         _ => true
     };
+
+    private void LibrarySearch_TextChanged(object? sender, TextChangedEventArgs e)
+    {
+        _librarySearch = e.NewTextValue ?? "";
+        ApplyLibraryFilter();
+    }
+
+    private async Task BuildTextIndexAsync(List<LibraryFile> files)
+    {
+        var index = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        await Task.Run(() =>
+        {
+            // A small local index: names, dates and extracted text from
+            // text-like documents. Media content itself is not analyzed.
+            var budget = 2 * 1024 * 1024;
+            foreach (var file in files)
+            {
+                if (budget <= 0) break;
+                if (!IsTextSearchable(file.FileName) || file.Size <= 0) continue;
+                try
+                {
+                    using var stream = File.OpenRead(file.Path);
+                    var take = (int)Math.Min(16 * 1024, file.Size);
+                    var buffer = new byte[take];
+                    var read = stream.Read(buffer, 0, take);
+                    if (read <= 0) continue;
+                    budget -= read;
+                    var text = Encoding.UTF8.GetString(buffer, 0, read);
+                    var extension = Path.GetExtension(file.FileName);
+                    if (extension.Equals(".html", StringComparison.OrdinalIgnoreCase) ||
+                        extension.Equals(".htm", StringComparison.OrdinalIgnoreCase) ||
+                        extension.Equals(".xml", StringComparison.OrdinalIgnoreCase))
+                    {
+                        text = System.Text.RegularExpressions.Regex.Replace(
+                            text, "<[^>]+>", " ");
+                    }
+                    index[file.Path] = text.ToLowerInvariant();
+                }
+                catch
+                {
+                }
+            }
+        });
+        _textIndex = index;
+    }
+
+    private static bool IsTextSearchable(string name) =>
+        Path.GetExtension(name).ToLowerInvariant() is
+            ".txt" or ".md" or ".csv" or ".json" or ".xml" or ".html" or ".htm" or
+            ".log" or ".srt" or ".vtt" or ".ini" or ".cfg" or ".yml" or ".yaml";
+
+    private bool MatchesSearch(LibraryFile file, string query)
+    {
+        if (string.IsNullOrWhiteSpace(query)) return true;
+        var normalized = NormalizeSearch(query);
+        var tokens = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var today = DateTime.Today;
+
+        if (tokens.Contains("yesterday") && file.Modified.Date != today.AddDays(-1)) return false;
+        if (tokens.Contains("today") && file.Modified.Date != today) return false;
+        if (normalized.Contains("last week", StringComparison.Ordinal) &&
+            file.Modified < today.AddDays(-7)) return false;
+        if (normalized.Contains("this week", StringComparison.Ordinal) &&
+            file.Modified < today.AddDays(-7)) return false;
+        if (normalized.Contains("last month", StringComparison.Ordinal) &&
+            file.Modified < today.AddDays(-31)) return false;
+
+        var month = MonthFrom(normalized);
+        if (month is not null && file.Modified.Month != month) return false;
+        var kind = KindFromSearch(normalized);
+        if (kind is not null && file.Kind != kind) return false;
+
+        var haystack = (file.FileName + " " + file.KindText + " " +
+                        file.Modified.ToString("MMMM") + " " +
+                        file.Modified.ToString("yyyy") + " " +
+                        _textIndex.GetValueOrDefault(file.Path, "")).ToLowerInvariant();
+
+        foreach (var token in tokens)
+        {
+            if (token.Length < 2) continue;
+            if (IsSearchStopWord(token) || IsDateSearchWord(token) ||
+                MonthFrom(token) is not null || IsKindSearchWord(token))
+            {
+                continue;
+            }
+            if (!haystack.Contains(token, StringComparison.Ordinal)) return false;
+        }
+        return true;
+    }
+
+    private static string NormalizeSearch(string value)
+    {
+        var builder = new StringBuilder(value.Length);
+        foreach (var character in value.ToLowerInvariant())
+        {
+            builder.Append(char.IsLetterOrDigit(character) ? character : ' ');
+        }
+        return string.Join(' ',
+            builder.ToString().Split(' ', StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    private static int? MonthFrom(string text)
+    {
+        for (var month = 0; month < 12; month++)
+        {
+            var name = System.Globalization.CultureInfo.InvariantCulture.DateTimeFormat
+                .GetMonthName(month + 1);
+            var shortName = System.Globalization.CultureInfo.InvariantCulture.DateTimeFormat
+                .GetAbbreviatedMonthName(month + 1);
+            if (text.Contains(name, StringComparison.OrdinalIgnoreCase) ||
+                text.Contains(shortName, StringComparison.OrdinalIgnoreCase))
+            {
+                return month + 1;
+            }
+        }
+        return null;
+    }
+
+    private static LibraryKind? KindFromSearch(string text)
+    {
+        if (HasSearchWord(text, "video", "movie", "clip", "film")) return LibraryKind.Video;
+        if (HasSearchWord(text, "photo", "picture", "image", "screenshot")) return LibraryKind.Image;
+        if (HasSearchWord(text, "audio", "song", "music", "recording", "voice"))
+            return LibraryKind.Audio;
+        if (HasSearchWord(text, "pdf", "document", "doc")) return LibraryKind.Document;
+        return null;
+    }
+
+    private static bool HasSearchWord(string text, params string[] words) =>
+        words.Any(word => text.Contains(word, StringComparison.Ordinal));
+
+    private static bool IsKindSearchWord(string token) => token is
+        "video" or "movie" or "clip" or "film" or "photo" or "picture" or "image" or
+        "screenshot" or "audio" or "song" or "music" or "recording" or "voice" or
+        "pdf" or "document" or "doc";
+
+    private static bool IsDateSearchWord(string token) => token is
+        "yesterday" or "today" or "tonight" or "morning" or "night" or "last" or
+        "week" or "month" or "this" or "latest" or "newest" or "recent";
+
+    private static bool IsSearchStopWord(string token) => token is
+        "the" or "a" or "an" or "my" or "me" or "from" or "of" or "in" or "on" or
+        "and" or "or" or "with" or "for" or "file" or "files";
 
     private void RefreshLibraryChips()
     {
@@ -1388,6 +1555,7 @@ public partial class MainPage : ContentPage
         _settings.SoundsEnabled = SoundsSwitch.IsToggled;
         _settings.NotificationsEnabled = NotificationsSwitch.IsToggled;
         _settingsStore.Save(_settings);
+        if (_browserLinkActive) StopBrowserLinkInternal(notify: false);
         SettingsStatusLabel.Text = "Restarting…";
         if (_temporaryLinkActive || _temporaryHotspot is not null || _temporaryWifiLink is not null)
         {
@@ -1851,6 +2019,11 @@ public partial class MainPage : ContentPage
             ShowToast("Finish or cancel the current transfer first.", IconInfo);
             return;
         }
+        if (_browserLinkActive)
+        {
+            ShowToast("Stop the browser link first.", IconInfo);
+            return;
+        }
         if (_temporaryLinkActive || _temporaryHotspot is not null || _temporaryWifiLink is not null)
         {
             ShowLinkOverlay();
@@ -1911,6 +2084,12 @@ public partial class MainPage : ContentPage
         {
             _linkSendAfterConnect = null;
             ShowToast("Finish or cancel the current transfer first.", IconInfo);
+            return;
+        }
+        if (_browserLinkActive)
+        {
+            _linkSendAfterConnect = null;
+            ShowToast("Stop the browser link first.", IconInfo);
             return;
         }
         if (_temporaryLinkActive || _temporaryHotspot is not null || _temporaryWifiLink is not null)
@@ -2147,6 +2326,24 @@ public partial class MainPage : ContentPage
 
     private async Task JoinTemporaryLinkAsync(string rawValue)
     {
+        if (rawValue.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            rawValue.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            // A Wisp browser link uses a normal web URL so any camera or
+            // browser can open it. If the user scanned it with Wisp instead,
+            // hand it to the browser rather than treating it as a bad link.
+            HideLinkOverlay();
+            try
+            {
+                await Launcher.Default.OpenAsync(rawValue);
+            }
+            catch
+            {
+                ShowToast("No browser is available on this device.", IconInfo);
+            }
+            return;
+        }
+
         if (!QrLinkPayload.TryParse(rawValue, out var payload, out var error) || payload is null)
         {
             LinkScanStatusLabel.Text = error;
@@ -2661,6 +2858,327 @@ public partial class MainPage : ContentPage
     }
 
     // ── Onboarding ────────────────────────────────────────────────────
+
+    // ── Browser link ─────────────────────────────────────────────────
+
+    private async void CreateBrowserLink_Click(object? sender, EventArgs e)
+    {
+        if (_browserLinkBusy) return;
+        if (_browserLinkActive)
+        {
+            ShowBrowserOverlay();
+            return;
+        }
+        if (_temporaryLinkActive || _temporaryHotspot is not null || _temporaryWifiLink is not null)
+        {
+            ShowToast("Disconnect the temporary link first.", IconInfo);
+            return;
+        }
+        if (_engine is null)
+        {
+            ShowToast("Wisp is offline. Try again in a moment.", IconError, error: true);
+            return;
+        }
+
+        _browserLinkBusy = true;
+        BrowserLinkServer? server = null;
+        try
+        {
+            var host = LanAddress.Find();
+            if (string.IsNullOrWhiteSpace(host))
+            {
+                ShowToast("Connect this phone to Wi-Fi first.", IconError, error: true, durationSeconds: 6);
+                return;
+            }
+
+            server = new BrowserLinkServer(_settings.SaveDirectory, _settings.DeviceName, host);
+            server.BrowserConnected += (_, _) =>
+                MainThread.BeginInvokeOnMainThread(OnBrowserConnected);
+            server.Activity += (_, _) =>
+                MainThread.BeginInvokeOnMainThread(TouchBrowserExpiry);
+            server.FileReceived += (_, path) =>
+                MainThread.BeginInvokeOnMainThread(() => OnBrowserFileReceived(path));
+            server.TextReceived += (_, text) =>
+                MainThread.BeginInvokeOnMainThread(async () => await OnBrowserTextReceivedAsync(text));
+            server.Start();
+
+            _browserServer = server;
+            _browserUrl = server.Url;
+            _browserLinkActive = true;
+            _browserFilesReceived = 0;
+            _browserExpiresAt = DateTimeOffset.UtcNow.AddMinutes(30);
+            BrowserQrImage.Source = QrCodeRenderer.Create(server.Url);
+            BrowserUrlLabel.Text = server.Url;
+            BrowserSubtitleLabel.Text = $"Open on any device · {host}";
+            BrowserStatusLabel.Text = "Waiting for a browser…";
+            BrowserWaitSpinner.IsVisible = true;
+            BrowserWaitSpinner.IsRunning = true;
+            BrowserExpiryLabel.Text = "";
+            UpdateBrowserCard();
+            ShowBrowserOverlay();
+            StartBrowserExpiryTimer();
+            StartForegroundService("Browser link active · open on any device");
+            ShowToast("Browser link ready", IconCheck);
+        }
+        catch (Exception exception)
+        {
+            server?.Dispose();
+            _browserServer = null;
+            _browserLinkActive = false;
+            _browserUrl = null;
+            UpdateBrowserCard();
+            ShowToast($"Could not start the browser link: {exception.Message}",
+                IconError, error: true, durationSeconds: 8);
+        }
+        finally
+        {
+            _browserLinkBusy = false;
+        }
+    }
+
+    private void OpenBrowserLink_Click(object? sender, EventArgs e)
+    {
+        if (!_browserLinkActive) return;
+        ShowBrowserOverlay();
+    }
+
+    private void CloseBrowserOverlay_Click(object? sender, EventArgs e)
+    {
+        HideBrowserOverlay();
+        if (_browserLinkActive)
+        {
+            ShowToast("Browser link stays active. Use Stop to end it.", IconInfo);
+        }
+    }
+
+    private async void CopyBrowserLink_Click(object? sender, EventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_browserUrl)) return;
+        try
+        {
+            await Clipboard.Default.SetTextAsync(_browserUrl);
+            ShowToast("Browser link copied", IconCheck);
+        }
+        catch (Exception exception)
+        {
+            ShowToast($"Could not copy the link: {exception.Message}", IconError, error: true);
+        }
+    }
+
+    private void StopBrowserLink_Click(object? sender, EventArgs e) =>
+        StopBrowserLinkInternal(notify: true);
+
+    private void StopBrowserLinkInternal(bool notify)
+    {
+        if (!_browserLinkActive && _browserServer is null) return;
+        StopBrowserExpiryTimer();
+        var server = _browserServer;
+        _browserServer = null;
+        try { server?.Dispose(); } catch { }
+        _browserLinkActive = false;
+        _browserUrl = null;
+        _browserFilesReceived = 0;
+        BrowserQrImage.Source = null;
+        BrowserWaitSpinner.IsRunning = false;
+        BrowserWaitSpinner.IsVisible = false;
+        HideBrowserOverlay();
+        UpdateBrowserCard();
+        if (notify) ShowToast("Browser link stopped", IconInfo);
+    }
+
+    private void ShowBrowserOverlay()
+    {
+        BrowserOverlay.IsVisible = true;
+        BrowserOverlay.Opacity = 0;
+        _ = BrowserOverlay.FadeTo(1, 160, Easing.CubicOut);
+    }
+
+    private void HideBrowserOverlay()
+    {
+        BrowserOverlay.IsVisible = false;
+        BrowserOverlay.Opacity = 0;
+    }
+
+    private void UpdateBrowserCard()
+    {
+        BrowserActiveBadge.IsVisible = _browserLinkActive;
+        BrowserSummaryLabel.IsVisible = _browserLinkActive;
+        BrowserStartButton.IsVisible = !_browserLinkActive;
+        BrowserActiveActions.IsVisible = _browserLinkActive;
+        BrowserCardHintLabel.Text = _browserLinkActive
+            ? "Open the link, or stop it when everyone is done."
+            : "Any phone, tablet, or laptop on this Wi-Fi. No install needed.";
+        BrowserSummaryLabel.Text = _browserLinkActive && _browserServer is not null
+            ? $"Browser link · {_browserServer.Host}:{_browserServer.Port}"
+            : "";
+    }
+
+    private void OnBrowserConnected()
+    {
+        if (!_browserLinkActive) return;
+        TouchBrowserExpiry();
+        BrowserStatusLabel.Text = "A browser is connected";
+        BrowserSubtitleLabel.Text = "Connected · files travel directly over Wi-Fi";
+        BrowserWaitSpinner.IsRunning = false;
+        BrowserWaitSpinner.IsVisible = false;
+    }
+
+    private void OnBrowserFileReceived(string path)
+    {
+        if (!_browserLinkActive) return;
+        _browserFilesReceived++;
+        TouchBrowserExpiry();
+        var name = Path.GetFileName(path);
+        BrowserStatusLabel.Text = _browserFilesReceived == 1
+            ? $"Received {name}"
+            : $"{_browserFilesReceived} files received";
+        BrowserWaitSpinner.IsRunning = false;
+        BrowserWaitSpinner.IsVisible = false;
+        _ = RefreshLibraryAsync(force: true);
+        _ = AndroidFileService.ExportFileToDownloadsAsync(path);
+        if (_appVisible)
+        {
+            ShowToast($"Received {name} from browser", IconCheck);
+        }
+        else if (_settings.NotificationsEnabled)
+        {
+            try
+            {
+                WispForegroundService.PostResult(AndroidApplication.Context, true,
+                    "File from browser", name);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    private async Task OnBrowserTextReceivedAsync(string text)
+    {
+        TouchBrowserExpiry();
+        try
+        {
+            await Clipboard.Default.SetTextAsync(text);
+            BrowserStatusLabel.Text = "Text copied to this phone";
+            if (_appVisible) ShowToast("Link or text copied to the clipboard", IconCheck);
+        }
+        catch (Exception exception)
+        {
+            if (_appVisible)
+                ShowToast($"Could not copy the text: {exception.Message}", IconError, error: true);
+        }
+    }
+
+    private void StartBrowserExpiryTimer()
+    {
+        StopBrowserExpiryTimer();
+        UpdateBrowserExpiryLabel();
+        _browserExpiryTimer = Dispatcher.CreateTimer();
+        _browserExpiryTimer.Interval = TimeSpan.FromSeconds(1);
+        _browserExpiryTimer.IsRepeating = true;
+        _browserExpiryTimer.Tick += (_, _) =>
+        {
+            if (!_browserLinkActive)
+            {
+                StopBrowserExpiryTimer();
+                return;
+            }
+            if (DateTimeOffset.UtcNow >= _browserExpiresAt)
+            {
+                StopBrowserLinkInternal(notify: false);
+                ShowToast("The browser link expired.", IconInfo);
+                return;
+            }
+            UpdateBrowserExpiryLabel();
+        };
+        _browserExpiryTimer.Start();
+    }
+
+    private void StopBrowserExpiryTimer()
+    {
+        _browserExpiryTimer?.Stop();
+        _browserExpiryTimer = null;
+    }
+
+    private void UpdateBrowserExpiryLabel()
+    {
+        var remaining = _browserExpiresAt - DateTimeOffset.UtcNow;
+        BrowserExpiryLabel.Text = remaining <= TimeSpan.Zero
+            ? "Closing…"
+            : $"Closes {remaining.Minutes}:{remaining.Seconds:00} after the last browser activity";
+    }
+
+    private void TouchBrowserExpiry()
+    {
+        if (!_browserLinkActive) return;
+        _browserExpiresAt = DateTimeOffset.UtcNow.AddMinutes(30);
+        UpdateBrowserExpiryLabel();
+    }
+
+    private async void VoiceSend_Click(object? sender, EventArgs e)
+    {
+        if (_voiceListening) return;
+        if (_engine is null)
+        {
+            ShowToast("Wisp is offline. Try again in a moment.", IconError, error: true);
+            return;
+        }
+        var peers = _engine.Peers.Where(peer => peer.Online).ToList();
+        if (peers.Count == 0)
+        {
+            ShowToast("No devices nearby. Open Wisp on the other device first.", IconInfo);
+            return;
+        }
+
+        var permission = await Permissions.CheckStatusAsync<Permissions.Microphone>();
+        if (permission != PermissionStatus.Granted)
+            permission = await Permissions.RequestAsync<Permissions.Microphone>();
+        if (permission != PermissionStatus.Granted)
+        {
+            ShowToast("Microphone access is needed for voice commands.", IconError, error: true);
+            return;
+        }
+        if (!global::Android.Speech.SpeechRecognizer.IsRecognitionAvailable(AndroidApplication.Context))
+        {
+            ShowToast("Speech recognition is not available on this device.", IconInfo);
+            return;
+        }
+        if (_librarySnapshot.Count == 0) await RefreshLibraryAsync(force: true);
+        if (_librarySnapshot.Count == 0)
+        {
+            ShowToast("Receive a file first, then ask Wisp to send it.", IconInfo);
+            return;
+        }
+
+        _voiceListening = true;
+        try
+        {
+            VoiceHintLabel.Text = "Listening…";
+            var activity = Platform.CurrentActivity;
+            if (activity is null) return;
+            var transcript = await VoiceCapture.ListenAsync(activity);
+            if (string.IsNullOrWhiteSpace(transcript))
+            {
+                VoiceHintLabel.Text = "I didn’t catch that. Tap Speak and try again.";
+                return;
+            }
+            VoiceHintLabel.Text = $"Heard: “{transcript}”";
+            var (command, message) = VoiceCommandParser.Parse(transcript, peers, _librarySnapshot);
+            if (command is null)
+            {
+                ShowToast(message, IconInfo, durationSeconds: 7);
+                return;
+            }
+            var confirmed = await DisplayAlertAsync("Send with Wisp?",
+                $"{command.File.FileName}\n→ {command.Peer.Name}\n\n“{transcript}”",
+                "Send", "Cancel");
+            if (confirmed) await SendToPeerAsync(command.Peer, [command.File.Path]);
+        }
+        finally
+        {
+            _voiceListening = false;
+        }
+    }
 
     private void OnboardingPermissions_Click(object sender, EventArgs e)
     {
