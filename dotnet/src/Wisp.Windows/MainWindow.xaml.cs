@@ -39,6 +39,8 @@ public sealed partial class MainWindow : Window
     private bool _closing;
     private bool _loaded;
     private bool _restarting;
+    private bool _updateBusy;
+    private bool _updateCheckedThisSession;
 
     public MainWindow()
     {
@@ -119,6 +121,7 @@ public sealed partial class MainWindow : Window
             _settingsStore.Save(_settings);
         }
         await StartEngineAsync();
+        MaybeAutoCheckUpdates();
     }
 
     private void MainWindow_Closed(object sender, WindowEventArgs args)
@@ -1238,6 +1241,161 @@ public sealed partial class MainWindow : Window
         if (string.IsNullOrEmpty(id)) return;
         CopyText(id);
         ShowToast("Copied", "Peer ID is on the clipboard.", InfoBarSeverity.Success);
+    }
+
+    // ── Updates ──────────────────────────────────────────────────────
+
+    private void MaybeAutoCheckUpdates()
+    {
+        if (_updateCheckedThisSession) return;
+        _updateCheckedThisSession = true;
+        var last = _settings.LastUpdateCheckUtc;
+        if (last is not null &&
+            DateTimeOffset.UtcNow - last.Value < TimeSpan.FromHours(24)) return;
+        _ = CheckForUpdatesAsync(manual: false);
+    }
+
+    private async void CheckForUpdates_Click(object sender, RoutedEventArgs e) =>
+        await CheckForUpdatesAsync(manual: true);
+
+    private async Task CheckForUpdatesAsync(bool manual)
+    {
+        if (_updateBusy) return;
+        _updateBusy = true;
+        try
+        {
+            var current = typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+            if (manual) UpdateStatusText.Text = "Checking…";
+            var result = await UpdateService.CheckAsync(current, "windows");
+            if (result.Error is not null)
+            {
+                UpdateStatusText.Text = "Could not check for updates.";
+                if (manual)
+                    ShowToast("Update check failed", result.Error, InfoBarSeverity.Warning);
+                return;
+            }
+
+            _settings.LastUpdateCheckUtc = DateTimeOffset.UtcNow;
+            if (result.IsNewer && result.Manifest is not null)
+            {
+                var manifest = result.Manifest;
+                if (!manual && manifest.Latest.Equals(_settings.SkippedUpdateVersion,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    UpdateStatusText.Text = $"Version {manifest.Latest} is skipped.";
+                    _settingsStore.Save(_settings);
+                    return;
+                }
+
+                UpdateStatusText.Text = $"Version {manifest.Latest} is available.";
+                var shouldPrompt = manual ||
+                    !manifest.Latest.Equals(_settings.PromptedUpdateVersion,
+                        StringComparison.OrdinalIgnoreCase);
+                if (shouldPrompt)
+                {
+                    _settings.PromptedUpdateVersion = manifest.Latest;
+                    await ShowUpdateDialogAsync(manifest, current);
+                }
+                if (manual)
+                    ShowToast("Update available", $"Wisp {manifest.Latest} is ready.",
+                        InfoBarSeverity.Informational);
+            }
+            else
+            {
+                UpdateStatusText.Text = $"You’re on the latest version ({current}).";
+                if (manual) ShowToast("Up to date", $"Wisp {current} is current.",
+                    InfoBarSeverity.Success);
+            }
+            _settingsStore.Save(_settings);
+        }
+        catch (Exception exception)
+        {
+            UpdateStatusText.Text = "Could not check for updates.";
+            if (manual)
+                ShowToast("Update check failed", exception.Message, InfoBarSeverity.Warning);
+        }
+        finally
+        {
+            _updateBusy = false;
+        }
+    }
+
+    private async Task ShowUpdateDialogAsync(UpdateManifest manifest, string current)
+    {
+        await _dialogGate.WaitAsync();
+        try
+        {
+            if (_closing) return;
+            var url = UpdateService.DownloadUrl(manifest, "windows");
+            var dialog = new ContentDialog
+            {
+                XamlRoot = RootGrid.XamlRoot,
+                Title = $"Wisp {manifest.Latest} is available",
+                PrimaryButtonText = string.IsNullOrWhiteSpace(url) ? "Open release" : "Download",
+                CloseButtonText = "Later",
+                SecondaryButtonText = "Skip this version",
+                DefaultButton = ContentDialogButton.Primary
+            };
+            var panel = new StackPanel { Spacing = 10, Width = 480 };
+            panel.Children.Add(new TextBlock
+            {
+                Text = $"You have {current}.",
+                Opacity = 0.75,
+                FontSize = 12
+            });
+            if (!string.IsNullOrWhiteSpace(manifest.Published))
+            {
+                panel.Children.Add(new TextBlock
+                {
+                    Text = $"Released {manifest.Published}",
+                    Opacity = 0.65,
+                    FontSize = 12
+                });
+            }
+            var notes = new ScrollViewer
+            {
+                MaxHeight = 300,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+            };
+            notes.Content = new TextBlock
+            {
+                Text = string.IsNullOrWhiteSpace(manifest.Notes)
+                    ? "See the release page for release notes."
+                    : manifest.Notes,
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 13
+            };
+            panel.Children.Add(notes);
+            dialog.Content = panel;
+            var result = await dialog.ShowAsync();
+            if (result == ContentDialogResult.Primary)
+            {
+                var target = string.IsNullOrWhiteSpace(url) ? manifest.ReleaseUrl : url;
+                if (!string.IsNullOrWhiteSpace(target))
+                {
+                    Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
+                }
+                else
+                {
+                    ShowToast("No download link", "The release has no download link yet.",
+                        InfoBarSeverity.Warning);
+                }
+            }
+            else if (result == ContentDialogResult.Secondary)
+            {
+                _settings.SkippedUpdateVersion = manifest.Latest;
+                _settingsStore.Save(_settings);
+                UpdateStatusText.Text = $"Version {manifest.Latest} skipped.";
+            }
+        }
+        catch (Exception exception)
+        {
+            ShowToast("Update", exception.Message, InfoBarSeverity.Warning);
+        }
+        finally
+        {
+            _dialogGate.Release();
+        }
     }
 
     private void TrustedAutoAccept_Changed(object sender, RoutedEventArgs e)
