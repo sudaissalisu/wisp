@@ -1,0 +1,10 @@
+{
+  "latest": "0.5.0",
+  "name": "Wisp 0.5.0",
+  "published": "2026-10-28",
+  "notes": "• In-app update checks with release notes, a non-nagging prompt, Later and Skip this version.\n• Update manifest hosted with GitHub; no custom update server and no account.\n• Android update prompts open the signed APK download; Windows opens the installer download.\n• Manual Check for updates in Settings → About on both platforms.\n• The browser link, Ask Wisp voice commands, Files search, media players and QR temporary link remain.",
+  "release_url": "https://github.com/sudaissalisu/wisp/releases/tag/v0.5.0",
+  "android_url": "https://github.com/sudaissalisu/wisp/releases/download/v0.5.0/Wisp-android-0.5.0.apk",
+  "windows_url": "https://github.com/sudaissalisu/wisp/releases/download/v0.5.0/Wisp-Setup-0.5.0.exe",
+  "mandatory": false
+}

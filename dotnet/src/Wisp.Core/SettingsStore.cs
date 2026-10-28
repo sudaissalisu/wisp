@@ -16,6 +16,9 @@ public sealed class AppSettings
     /// <summary>Ask for biometric authentication when returning to the app.</summary>
     public bool BiometricUnlock { get; set; }
     public bool Onboarded { get; set; }
+    public DateTimeOffset? LastUpdateCheckUtc { get; set; }
+    public string SkippedUpdateVersion { get; set; } = "";
+    public string PromptedUpdateVersion { get; set; } = "";
 }
 
 public sealed class SettingsStore

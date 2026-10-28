@@ -85,3 +85,32 @@ if (missing is not null) throw new Exception("voice should reject unknown peer")
 Console.WriteLine("voice parser ok");
 Directory.Delete(voiceRoot, true);
 Console.WriteLine("ALL BROWSER AND VOICE TESTS PASSED");
+
+var manifestJson = """
+{
+  "latest": "0.5.1",
+  "name": "Wisp 0.5.1",
+  "published": "2026-10-28",
+  "notes": "test notes",
+  "release_url": "https://github.com/sudaissalisu/wisp/releases/tag/v0.5.1",
+  "android_url": "https://github.com/sudaissalisu/wisp/releases/download/v0.5.1/Wisp-android-0.5.1.apk",
+  "windows_url": "https://github.com/sudaissalisu/wisp/releases/download/v0.5.1/Wisp-Setup-0.5.1.exe",
+  "mandatory": false
+}
+""";
+var manifest = UpdateService.ParseManifest(manifestJson);
+if (manifest is null || manifest.Latest != "0.5.1" || manifest.Notes != "test notes")
+    throw new Exception("update manifest parse failed");
+if (!UpdateService.IsNewer("0.5.1", "0.5.0")) throw new Exception("newer version compare failed");
+if (UpdateService.IsNewer("0.5.0", "0.5.0")) throw new Exception("equal version compare failed");
+if (UpdateService.IsNewer("0.4.9", "0.5.0")) throw new Exception("older version compare failed");
+if (!UpdateService.IsNewer("v0.5.1", "0.5.0")) throw new Exception("v-prefix compare failed");
+if (UpdateService.ParseManifest("not json") is not null) throw new Exception("invalid manifest accepted");
+var androidUrl = UpdateService.DownloadUrl(manifest, "android");
+if (androidUrl is null || !androidUrl.EndsWith("Wisp-android-0.5.1.apk", StringComparison.Ordinal))
+    throw new Exception("android asset URL failed");
+var insecure = manifest with { AndroidUrl = "http://example.com/wisp.apk" };
+if (UpdateService.DownloadUrl(insecure, "android") is not null)
+    throw new Exception("insecure update URL accepted");
+Console.WriteLine("update manifest checks ok");
+Console.WriteLine("ALL BROWSER, VOICE AND UPDATE TESTS PASSED");
